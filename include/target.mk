@@ -319,6 +319,9 @@ ifeq ($(DUMP),1)
     ifneq ($(CONFIG_PINCTRL),)
       FEATURES += pinctrl
     endif
+    ifneq ($(CONFIG_PM),)
+      FEATURES += pm
+    endif
     ifneq ($(CONFIG_PWM),)
       FEATURES += pwm
     endif
