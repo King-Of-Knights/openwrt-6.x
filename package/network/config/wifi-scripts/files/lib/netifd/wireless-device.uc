@@ -36,6 +36,8 @@ function handle_link(dev, data, up)
 		     (data.type == "vif" && config.mode == "ap");
 
 	let dev_data = {
+		external: 2,
+		check_vlan: false,
 		isolate: !!config.bridge_isolate,
 		wireless: true,
 		wireless_ap: ap,
@@ -389,11 +391,14 @@ function update(data)
 
 function start()
 {
-	if (this.delete || this.data.config.disabled)
+	if (this.delete)
 		return;
 
 	this.dbg("start, state=" + this.state);
 	this.autostart = true;
+	if (this.data.config.disabled)
+		return;
+
 	wdev_reset(this);
 
 	if (this.state != "down")
@@ -425,7 +430,10 @@ function check()
 		return;
 
 	wdev_config_init(this);
-	this.setup();
+	if (this.data.config.disabled)
+		this.teardown();
+	else
+		this.setup();
 }
 
 function wdev_mark_up(wdev)
@@ -530,7 +538,7 @@ function hotplug(name, add)
 		    data.type != "vif" && data.type != "vlan")
 			continue;
 
-		handle_link(dev, data, up);
+		handle_link(dev, data, add);
 	}
 }
 
