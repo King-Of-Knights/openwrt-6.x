@@ -94,7 +94,6 @@
 #define RTL838X_SDS_MODE_SEL			(0x0028)
 #define RTL838X_SDS_CFG_REG			(0x0034)
 #define RTL838X_INT_MODE_CTRL			(0x005c)
-#define RTL838X_CHIP_INFO			(0x00d8)
 #define RTL838X_SDS4_REG28			(0xef80)
 #define RTL838X_SDS4_DUMMY0			(0xef8c)
 #define RTL838X_SDS5_EXT_REG6			(0xf18c)
@@ -455,5 +454,8 @@ int phy_port_write_paged(struct phy_device *phydev, int port, int page, u32 regn
 
 int rtmdio_838x_read_phy(u32 port, u32 page, u32 reg, u32 *val);
 int rtmdio_838x_write_phy(u32 port, u32 page, u32 reg, u32 val);
+
+int rtmdio_930x_read_sds_phy(int sds, int page, int regnum);
+int rtmdio_930x_write_sds_phy(int sds, int page, int regnum, u16 val);
 
 #endif /* _RTL838X_ETH_H */
