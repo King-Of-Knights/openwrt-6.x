@@ -203,6 +203,7 @@ ramips_setup_macs()
 	wavlink,wl-wn533a8|\
 	winstars,ws-wn583a6|\
 	zbtlink,zbt-we1326|\
+	zbtlink,zbt-wg108|\
 	zbtlink,zbt-wg3526-16m|\
 	zbtlink,zbt-wg3526-32m)
 		label_mac=$(mtd_get_mac_binary factory 0x4)
@@ -241,11 +242,6 @@ ramips_setup_macs()
 		wan_mac=$(mtd_get_mac_ascii board_data "mac")
 		lan_mac=$wan_mac
 		label_mac=$wan_mac
-		;;
-	comfast,cf-e390ax)
-		lan_mac=$(cat /sys/class/net/eth0/address)
-		label_mac=$lan_mac
-		wan_mac=$(macaddr_add "$lan_mac" 1)
 		;;
 	dlink,covr-x1860-a1)
 		label_mac=$(mtd_get_mac_ascii config2 factory_mac)

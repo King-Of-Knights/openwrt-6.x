@@ -397,13 +397,13 @@ static void rtl83xx_vlan_setup(struct rtl838x_switch_priv *priv)
 		priv->r->vlan_fwd_on_inner(i, true);
 }
 
-static void rtl83xx_setup_bpdu_traps(struct rtl838x_switch_priv *priv)
+static void rtldsa_setup_bpdu_traps(struct rtl838x_switch_priv *priv)
 {
 	for (int i = 0; i < priv->cpu_port; i++)
 		priv->r->set_receive_management_action(i, BPDU, TRAP2CPU);
 }
 
-static void rtl83xx_setup_lldp_traps(struct rtl838x_switch_priv *priv)
+static void rtldsa_setup_lldp_traps(struct rtl838x_switch_priv *priv)
 {
 	for (int i = 0; i < priv->cpu_port; i++)
 		priv->r->set_receive_management_action(i, LLDP, TRAP2CPU);
@@ -461,8 +461,8 @@ static int rtl83xx_setup(struct dsa_switch *ds)
 
 	rtl83xx_vlan_setup(priv);
 
-	rtl83xx_setup_bpdu_traps(priv);
-	rtl83xx_setup_lldp_traps(priv);
+	rtldsa_setup_bpdu_traps(priv);
+	rtldsa_setup_lldp_traps(priv);
 
 	ds->configure_vlan_while_not_filtering = true;
 
@@ -528,6 +528,8 @@ static int rtl93xx_setup(struct dsa_switch *ds)
 	rtldsa_init_counters(priv);
 
 	rtl83xx_vlan_setup(priv);
+
+	rtldsa_setup_lldp_traps(priv);
 
 	ds->configure_vlan_while_not_filtering = true;
 
@@ -821,12 +823,6 @@ static void rtl931x_phylink_mac_config(struct dsa_switch *ds, int port,
 	pr_info("%s: speed %d sds_num %d\n", __func__, state->speed, sds_num);
 
 	switch (state->interface) {
-	case PHY_INTERFACE_MODE_HSGMII:
-		pr_info("%s setting mode PHY_INTERFACE_MODE_HSGMII\n", __func__);
-		band = rtl931x_sds_cmu_band_get(sds_num, PHY_INTERFACE_MODE_HSGMII);
-		rtl931x_sds_init(sds_num, PHY_INTERFACE_MODE_HSGMII);
-		band = rtl931x_sds_cmu_band_set(sds_num, true, 62, PHY_INTERFACE_MODE_HSGMII);
-		break;
 	case PHY_INTERFACE_MODE_1000BASEX:
 		band = rtl931x_sds_cmu_band_get(sds_num, PHY_INTERFACE_MODE_1000BASEX);
 		rtl931x_sds_init(sds_num, PHY_INTERFACE_MODE_1000BASEX);

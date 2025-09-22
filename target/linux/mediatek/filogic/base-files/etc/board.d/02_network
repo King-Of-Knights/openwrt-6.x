@@ -9,6 +9,7 @@ mediatek_setup_interfaces()
 
 	case $board in
 	abt,asr3000|\
+	buffalo,wsr-6000ax8|\
 	cmcc,rax3000m|\
 	h3c,magic-nx30-pro|\
 	netis,nx31|\
@@ -24,6 +25,9 @@ mediatek_setup_interfaces()
 	acer,predator-w6|\
 	acer,predator-w6d)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 game" eth1
+		;;
+	acer,predator-w6x)
+		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" eth1
 		;;
 	acer,vero-w6m)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3" internet
@@ -43,6 +47,7 @@ mediatek_setup_interfaces()
 	creatlentem,clt-r30b1-112m|\
 	cudy,wr3000-v1|\
 	jcg,q30-pro|\
+	keenetic,kn-3711|\
 	keenetic,kn-3811|\
 	qihoo,360t7|\
 	routerich,ax3000|\
@@ -52,6 +57,7 @@ mediatek_setup_interfaces()
 		;;
 	asus,tuf-ax4200|\
 	iptime,ax3000sm|\
+	iptime,ax7800m-6e|\
 	jdcloud,re-cp-03|\
 	mediatek,mt7981-rfb|\
 	netcore,n60|\
@@ -60,11 +66,10 @@ mediatek_setup_interfaces()
 	ruijie,rg-x60-pro|\
 	unielec,u7981-01*|\
 	zbtlink,zbt-z8102ax|\
-	zbtlink,zbt-z8102ax-v2|\
-	zyxel,ex5601-t0-stock|\
-	zyxel,ex5601-t0-ubootmod)
+	zbtlink,zbt-z8102ax-v2)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" eth1
 		;;
+	asiarf,ap7986-003|\
 	asus,tuf-ax6000|\
 	glinet,gl-mt6000|\
 	tplink,tl-xdr4288|\
@@ -142,7 +147,8 @@ mediatek_setup_interfaces()
 		;;
 	tplink,tl-xdr6086|\
 	wavlink,wl-wn551x3|\
-	wavlink,wl-wn586x3)
+	wavlink,wl-wn586x3|\
+	wavlink,wl-wn586x3b)
 		ucidef_set_interfaces_lan_wan "lan1 lan2" eth1
 		;;
 	tplink,archer-ax80-v1)
@@ -178,6 +184,11 @@ mediatek_setup_macs()
 	acer,vero-w6m)
 		wan_mac=$(mmc_get_mac_ascii u-boot-env WANMAC)
 		lan_mac=$(mmc_get_mac_ascii u-boot-env LANMAC)
+		;;
+	acer,predator-w6x)
+		wan_mac=$(mtd_get_mac_ascii u-boot-env ethaddr)
+		lan_mac=$(macaddr_add "$wan_mac" 1)
+		label_mac=$wan_mac
 		;;
 	bananapi,bpi-r3|\
 	bananapi,bpi-r3-mini|\
