@@ -1,6 +1,6 @@
 --- a/include/linux/ppp_channel.h
 +++ b/include/linux/ppp_channel.h
-@@ -61,6 +61,51 @@ struct ppp_channel {
+@@ -60,6 +60,51 @@ struct ppp_channel {
  };
  
  #ifdef __KERNEL__
@@ -52,7 +52,7 @@
  /* Called by the channel when it can send some more data. */
  extern void ppp_output_wakeup(struct ppp_channel *);
  
-@@ -144,5 +189,17 @@ extern void ppp_update_stats(struct net_
+@@ -143,5 +188,17 @@ extern void ppp_update_stats(struct net_
   * that ppp_unregister_channel returns.
   */
  
@@ -126,7 +126,7 @@
  };
  
  static const struct proto_ops pppol2tp_ops;
-@@ -368,6 +376,13 @@ static int pppol2tp_xmit(struct ppp_chan
+@@ -357,6 +365,13 @@ static int pppol2tp_xmit(struct ppp_chan
  	skb->data[0] = PPP_ALLSTATIONS;
  	skb->data[1] = PPP_UI;
  
@@ -140,16 +140,16 @@
  	local_bh_disable();
  	l2tp_xmit_skb(session, skb);
  	local_bh_enable();
-@@ -804,7 +819,7 @@ static int pppol2tp_connect(struct socke
+@@ -794,7 +809,7 @@ static int pppol2tp_connect(struct socke
  	po->chan.hdrlen = PPPOL2TP_L2TP_HDR_SIZE_NOSEQ;
  
  	po->chan.private = sk;
 -	po->chan.ops	 = &pppol2tp_chan_ops;
 +	po->chan.ops	 = (struct ppp_channel_ops *)&pppol2tp_chan_ops.ops;
  	po->chan.mtu	 = pppol2tp_tunnel_mtu(tunnel);
+ 	po->chan.direct_xmit	= true;
  
- 	error = ppp_register_net_channel(sock_net(sk), &po->chan);
-@@ -1720,6 +1735,109 @@ static void __exit pppol2tp_exit(void)
+@@ -1712,6 +1727,109 @@ static void __exit pppol2tp_exit(void)
  	unregister_pernet_device(&pppol2tp_net_ops);
  }
  
@@ -261,7 +261,7 @@
  
 --- a/drivers/net/ppp/ppp_generic.c
 +++ b/drivers/net/ppp/ppp_generic.c
-@@ -3732,6 +3732,32 @@ int ppp_is_multilink(struct net_device *
+@@ -3741,6 +3741,32 @@ int ppp_is_multilink(struct net_device *
  }
  EXPORT_SYMBOL(ppp_is_multilink);
  
@@ -294,7 +294,7 @@
  /* ppp_channel_get_protocol()
   *	Call this to obtain the underlying protocol of the PPP channel,
   *	e.g. PX_PROTO_OE
-@@ -3870,6 +3896,59 @@ int ppp_hold_channels(struct net_device
+@@ -3879,6 +3905,59 @@ int ppp_hold_channels(struct net_device
  }
  EXPORT_SYMBOL(ppp_hold_channels);
  
