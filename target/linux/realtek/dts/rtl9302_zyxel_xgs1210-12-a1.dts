@@ -13,7 +13,6 @@
 		reg = <24>;
 		compatible = "ethernet-phy-ieee802.3-c45";
 		rtl9300,smi-address = <1 8>;
-		sds = < 6 >;
 		// Disabled because we do not know how to bring up again
 		// reset-gpios = <&gpio0 21 GPIO_ACTIVE_LOW>;
 	};
@@ -22,7 +21,6 @@
 		reg = <25>;
 		compatible = "ethernet-phy-ieee802.3-c45";
 		rtl9300,smi-address = <2 9>;
-		sds = < 7 >;
 		// Disabled because we do not know how to bring up again
 		// reset-gpios = <&gpio0 21 GPIO_ACTIVE_LOW>;
 	};
@@ -33,15 +31,17 @@
 		port@24 {
 			reg = <24>;
 			label = "lan9";
-			phy-mode = "2500base-x";
+			pcs-handle = <&serdes6>;
 			phy-handle = <&phy24>;
+			phy-mode = "2500base-x";
 			led-set = <1>;
 		};
 		port@25 {
 			reg = <25>;
 			label = "lan10";
-			phy-mode = "2500base-x";
+			pcs-handle = <&serdes7>;
 			phy-handle = <&phy25>;
+			phy-mode = "2500base-x";
 			led-set = <1>;
 		};
 	};

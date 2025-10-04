@@ -157,38 +157,8 @@ function config_add_mesh_params(config, data) {
 		config_add(config, param, data[param]);
 }
 
-function setup_mlo(data) {
-	let config = {};
-	let idx = 0;
-
-	for (let k, v in data.interfaces) {
-		let ifname = v.config.ifname;
-		if (!ifname)
-			ifname = 'ap-mld' + idx++;
-
-		delete v.config.ifname;
-		config[ifname] = v.config;
-		netifd.set_vif(k, ifname);
-
-		v.config.phy = find_phy(v.config.radio_config[0], true);
-		delete v.config.radio_config;
-	}
-
-	let ret = ubus.call('hostapd', 'mld_set', { config });
-	if (type(ret) != "object")
-		return netifd.setup_failed('HOSTAPD_START_FAILED');
-
-	netifd.add_process('/usr/sbin/hostapd', ret.pid, true, true);
-	netifd.set_up();
-
-	return 0;
-}
-
 function setup() {
 	let data = json(ARGV[3]);
-
-	if (ARGV[2] == "#mlo")
-		return setup_mlo(data);
 
 	data.phy = find_phy(data.config, true);
 	if (!data.phy) {
@@ -205,7 +175,30 @@ function setup() {
 
 	log('Starting');
 
-	validate('device', data.config);
+	let config = data.config;
+
+	if (!config.band) {
+		switch (config.hwmode) {
+		case 'a':
+		case '11a':
+			config.band = '5g';
+			break;
+		case 'ad':
+		case '11ad':
+			config.band = '60g';
+			break;
+		case 'b':
+		case 'g':
+		case '11b':
+		case '11g':
+		default:
+			config.band = '2g';
+			break;
+		}
+	}
+	delete config.hwmode;
+
+	validate('device', config);
 	setup_phy(data.phy, data.config, data.data);
 
 	let supplicant_mesh;
@@ -230,7 +223,6 @@ function setup() {
 		}
 
 		switch (mode) {
-		case 'link':
 		case 'ap':
 			has_ap = true;
 			for (let _, sta in v.stas)
@@ -243,8 +235,7 @@ function setup() {
 				data.config.noscan = true;
 			validate('iface', v.config);
 			iface.prepare(v.config, data.phy + data.phy_suffix, data.config.num_global_macaddr, data.config.macaddr_base);
-			if (mode != "link")
-				netifd.set_vif(k, v.config.ifname);
+			netifd.set_vif(k, v.config.ifname);
 			break;
 		}
 
@@ -259,6 +250,7 @@ function setup() {
 				break;
 			// fallthrough
 		case 'sta':
+			data.ap_start_disabled = true;
 			let config = supplicant.generate(supplicant_data, data, v);
 			if (mode == "mesh")
 				config_add_mesh_params(config, v.config);

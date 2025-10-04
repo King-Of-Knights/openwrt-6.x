@@ -1,8 +1,17 @@
 let libubus = require("ubus");
-import { open, readfile } from "fs";
+import { open, readfile, access } from "fs";
 import { wdev_remove, is_equal, vlist_new, phy_is_fullmac, phy_open, wdev_set_radio_mask, wdev_set_up } from "common";
 
 let ubus = libubus.connect(null, 60);
+
+function ex_handler(e)
+{
+	e = split(`${e}\n${e.stacktrace[0].context}`, '\n');
+	for (let line in e)
+		hostapd.printf(line);
+	return libubus.STATUS_UNKNOWN_ERROR;
+}
+libubus.guard(ex_handler);
 
 hostapd.data.config = {};
 hostapd.data.pending_config = {};
@@ -768,6 +777,10 @@ function bss_check_mld(phydev, iface_name, bss)
 
 	bss.mld_bssid = mld_data.macaddr;
 	mld_data.iface[iface_name] = true;
+
+	if (!access('/sys/class/net/' + bss.ifname, 'x'))
+		mld_data.has_wdev = false;
+
 	if (mld_data.has_wdev)
 		return true;
 
@@ -958,18 +971,6 @@ function iface_load_config(phy, radio, filename)
 	return config;
 }
 
-function ex_wrap(func) {
-	return (req) => {
-		try {
-			let ret = func(req);
-			return ret;
-		} catch(e) {
-			hostapd.printf(`Exception in ubus function: ${e}\n${e.stacktrace[0].context}`);
-		}
-		return libubus.STATUS_UNKNOWN_ERROR;
-	};
-}
-
 function phy_name(phy, radio)
 {
 	if (!phy)
@@ -1007,6 +1008,7 @@ function mld_add_bss(name, data, phy_list, i)
 	if (!config.phy)
 		return;
 
+	hostapd.printf(`Add MLD interface ${name}`);
 	wdev_remove(name);
 	let phydev = phy_list[config.phy];
 	if (!phydev) {
@@ -1110,7 +1112,8 @@ function mld_set_config(config)
 	// add new interfaces
 	hostapd.data.mld = new_mld;
 	for (let name, data in new_mld)
-		mld_add_bss(name, data, phy_list);
+		if (!data.ifname)
+			mld_add_bss(name, data, phy_list);
 
 	if (!new_config)
 		return;
@@ -1126,7 +1129,7 @@ let main_obj = {
 			phy: "",
 			radio: 0,
 		},
-		call: ex_wrap(function(req) {
+		call: function(req) {
 			let phy_list = req.args.phy ? [ phy_name(req.args.phy, req.args.radio) ] : keys(hostapd.data.config);
 			for (let phy_name in phy_list) {
 				let phy = hostapd.data.config[phy_name];
@@ -1135,7 +1138,7 @@ let main_obj = {
 			}
 
 			return 0;
-		})
+		}
 	},
 	apsta_state: {
 		args: {
@@ -1147,7 +1150,7 @@ let main_obj = {
 			csa: true,
 			csa_count: 0,
 		},
-		call: ex_wrap(function(req) {
+		call: function(req) {
 			let phy = phy_name(req.args.phy, req.args.radio);
 			if (req.args.up == null || !phy)
 				return libubus.STATUS_INVALID_ARGUMENT;
@@ -1165,32 +1168,34 @@ let main_obj = {
 				return 0;
 			}
 
-			if (!req.args.frequency)
-				return libubus.STATUS_INVALID_ARGUMENT;
+			let freq_info;
+			if (req.args.frequency) {
+				freq_info = iface_freq_info(iface, config, req.args);
+				if (!freq_info)
+					return libubus.STATUS_UNKNOWN_ERROR;
 
-			let freq_info = iface_freq_info(iface, config, req.args);
-			if (!freq_info)
-				return libubus.STATUS_UNKNOWN_ERROR;
-
-			let ret;
-			if (req.args.csa) {
-				freq_info.csa_count = req.args.csa_count ?? 10;
-				ret = iface.switch_channel(freq_info);
-			} else {
-				ret = iface.start(freq_info);
+				if (req.args.csa) {
+					freq_info.csa_count = req.args.csa_count ?? 10;
+					let ret = iface.switch_channel(freq_info);
+					if (!ret)
+						return libubus.STATUS_UNKNOWN_ERROR;
+					return 0;
+				}
 			}
+
+			let ret = iface.start(freq_info);
 			if (!ret)
 				return libubus.STATUS_UNKNOWN_ERROR;
 
 			return 0;
-		})
+		}
 	},
 	config_get_macaddr_list: {
 		args: {
 			phy: "",
 			radio: 0,
 		},
-		call: ex_wrap(function(req) {
+		call: function(req) {
 			let phy = phy_name(req.args.phy, req.args.radio);
 			if (!phy)
 				return libubus.STATUS_INVALID_ARGUMENT;
@@ -1205,13 +1210,41 @@ let main_obj = {
 
 			ret.macaddr = map(config.bss, (bss) => bss.bssid);
 			return ret;
-		})
+		}
+	},
+	switch_channel: {
+		args: {
+			phy: "",
+			radio: 0,
+			csa_count: 0,
+			sec_channel: 0,
+			oper_chwidth: 0,
+			frequency: 0,
+			center_freq1: 0,
+			center_freq2: 0,
+		},
+		call: function(req) {
+			let phy = phy_name(req.args.phy, req.args.radio);
+			if (!req.args.frequency || !phy)
+				return libubus.STATUS_INVALID_ARGUMENT;
+
+			let iface = hostapd.interfaces[phy];
+			if (!iface)
+				return libubus.STATUS_NOT_FOUND;
+
+			req.args.csa_count ??= 10;
+			let ret = iface.switch_channel(req.args);
+			if (!ret)
+				return libubus.STATUS_UNKNOWN_ERROR;
+
+			return 0;
+		},
 	},
 	mld_set: {
 		args: {
 			config: {}
 		},
-		call: ex_wrap(function(req) {
+		call: function(req) {
 			if (!req.args.config)
 				return libubus.STATUS_INVALID_ARGUMENT;
 
@@ -1220,17 +1253,17 @@ let main_obj = {
 			return {
 				pid: hostapd.getpid()
 			};
-		})
+		}
 	},
 	config_reset: {
 		args: {
 		},
-		call: ex_wrap(function(req) {
+		call: function(req) {
 			for (let name in hostapd.data.config)
 				iface_set_config(name);
 			mld_set_config({});
 			return 0;
-		})
+		}
 	},
 	config_set: {
 		args: {
@@ -1239,7 +1272,7 @@ let main_obj = {
 			config: "",
 			prev_config: "",
 		},
-		call: ex_wrap(function(req) {
+		call: function(req) {
 			let phy = req.args.phy;
 			let radio = req.args.radio;
 			let name = phy_name(phy, radio);
@@ -1267,14 +1300,14 @@ let main_obj = {
 			return {
 				pid: hostapd.getpid()
 			};
-		})
+		}
 	},
 	config_add: {
 		args: {
 			iface: "",
 			config: "",
 		},
-		call: ex_wrap(function(req) {
+		call: function(req) {
 			if (!req.args.iface || !req.args.config)
 				return libubus.STATUS_INVALID_ARGUMENT;
 
@@ -1284,25 +1317,25 @@ let main_obj = {
 			return {
 				pid: hostapd.getpid()
 			};
-		})
+		}
 	},
 	config_remove: {
 		args: {
 			iface: ""
 		},
-		call: ex_wrap(function(req) {
+		call: function(req) {
 			if (!req.args.iface)
 				return libubus.STATUS_INVALID_ARGUMENT;
 
 			hostapd.remove_iface(req.args.iface);
 			return 0;
-		})
+		}
 	},
 	bss_info: {
 		args: {
 			iface: ""
 		},
-		call: ex_wrap(function(req) {
+		call: function(req) {
 			if (!req.args.iface)
 				return libubus.STATUS_INVALID_ARGUMENT;
 
@@ -1322,7 +1355,7 @@ let main_obj = {
 			}
 
 			return ret;
-		})
+		}
 	},
 };
 

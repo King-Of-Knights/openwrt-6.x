@@ -293,9 +293,18 @@ static inline int rtl839x_l2_port_new_sa_fwd(int p)
 	return RTL839X_L2_PORT_NEW_SA_FWD(p);
 }
 
-static inline int rtl839x_mac_link_spd_sts(int p)
+static int rtldsa_839x_get_mirror_config(struct rtldsa_mirror_config *config,
+					 int group, int port)
 {
-	return RTL839X_MAC_LINK_SPD_STS(p);
+	config->ctrl = RTL839X_MIR_CTRL + group * 4;
+	config->spm = RTL839X_MIR_SPM_CTRL + group * 8;
+	config->dpm = RTL839X_MIR_DPM_CTRL + group * 8;
+
+	/* Enable mirroring to destination port */
+	config->val = BIT(0);
+	config->val |= port << 4;
+
+	return 0;
 }
 
 static inline int rtl839x_trk_mbr_ctr(int group)
@@ -1683,14 +1692,7 @@ const struct rtl838x_reg rtl839x_reg = {
 	.mac_port_ctrl = rtl839x_mac_port_ctrl,
 	.l2_port_new_salrn = rtl839x_l2_port_new_salrn,
 	.l2_port_new_sa_fwd = rtl839x_l2_port_new_sa_fwd,
-	.mir_ctrl = RTL839X_MIR_CTRL,
-	.mir_dpm = RTL839X_MIR_DPM_CTRL,
-	.mir_spm = RTL839X_MIR_SPM_CTRL,
-	.mac_link_sts = RTL839X_MAC_LINK_STS,
-	.mac_link_dup_sts = RTL839X_MAC_LINK_DUP_STS,
-	.mac_link_spd_sts = rtl839x_mac_link_spd_sts,
-	.mac_rx_pause_sts = RTL839X_MAC_RX_PAUSE_STS,
-	.mac_tx_pause_sts = RTL839X_MAC_TX_PAUSE_STS,
+	.get_mirror_config = rtldsa_839x_get_mirror_config,
 	.read_l2_entry_using_hash = rtl839x_read_l2_entry_using_hash,
 	.write_l2_entry_using_hash = rtl839x_write_l2_entry_using_hash,
 	.read_cam = rtl839x_read_cam,

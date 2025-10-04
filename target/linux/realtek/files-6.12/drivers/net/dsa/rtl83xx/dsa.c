@@ -567,158 +567,13 @@ static int rtl93xx_get_sds(struct phy_device *phydev)
 	return sds_num;
 }
 
-static void rtldsa_83xx_pcs_get_state(struct phylink_pcs *pcs, struct phylink_link_state *state)
-{
-	struct rtl838x_pcs *rtpcs = container_of(pcs, struct rtl838x_pcs, pcs);
-	struct rtl838x_switch_priv *priv = rtpcs->priv;
-	int port = rtpcs->port;
-	u64 speed;
-
-	state->link = 0;
-	state->speed = SPEED_UNKNOWN;
-	state->duplex = DUPLEX_UNKNOWN;
-	state->pause &= ~(MLO_PAUSE_RX | MLO_PAUSE_TX);
-
-	if (port < 0 || port > priv->cpu_port)
-		return;
-
-	if (!(priv->r->get_port_reg_le(priv->r->mac_link_sts) & BIT_ULL(port)))
-		return;
-
-	state->link = 1;
-
-	if (priv->r->get_port_reg_le(priv->r->mac_link_dup_sts) & BIT_ULL(port))
-		state->duplex = DUPLEX_FULL;
-	else
-		state->duplex = DUPLEX_HALF;
-
-	speed = priv->r->get_port_reg_le(priv->r->mac_link_spd_sts(port));
-	speed = (speed >> ((port % 16) << 1)) & 0x3;
-
-	switch (speed) {
-	case RTL_SPEED_10:
-		state->speed = SPEED_10;
-		break;
-	case RTL_SPEED_100:
-		state->speed = SPEED_100;
-		break;
-	case RTL_SPEED_1000:
-		state->speed = SPEED_1000;
-		break;
-	case 3:
-		/*
-		 * This is ok so far but with minor inconsistencies. On RTL838x this setting is
-		 * for either 500M or 2G. It might be that MAC_GLITE_STS register tells more. On
-		 * RTL839x these vendor specifics are derived from MAC_LINK_500M_STS and mode 3
-		 * is 10G. This is of interest so resolve to it. Sadly it is off by one for the
-		 * current RTL_SPEED_10000 (=4) definition for RTL93xx.
-		 */
-		state->speed = SPEED_10000;
-		break;
-	}
-
-	if (priv->r->get_port_reg_le(priv->r->mac_rx_pause_sts) & BIT_ULL(port))
-		state->pause |= MLO_PAUSE_RX;
-	if (priv->r->get_port_reg_le(priv->r->mac_tx_pause_sts) & BIT_ULL(port))
-		state->pause |= MLO_PAUSE_TX;
-}
-
-static void rtldsa_93xx_pcs_get_state(struct phylink_pcs *pcs,
-				      struct phylink_link_state *state)
-{
-	struct rtl838x_pcs *rtpcs = container_of(pcs, struct rtl838x_pcs, pcs);
-	struct rtl838x_switch_priv *priv = rtpcs->priv;
-	int port = rtpcs->port;
-	u64 speed;
-	u64 link;
-	u64 media;
-
-	state->link = 0;
-	state->speed = SPEED_UNKNOWN;
-	state->duplex = DUPLEX_UNKNOWN;
-	state->pause &= ~(MLO_PAUSE_RX | MLO_PAUSE_TX);
-
-	if (port < 0 || port > priv->cpu_port)
-		return;
-
-	/* On the RTL9300 for at least the RTL8226B PHY, the MAC-side link
-	 * state needs to be read twice in order to read a correct result.
-	 * This would not be necessary for ports connected e.g. to RTL8218D
-	 * PHYs.
-	 */
-	link = priv->r->get_port_reg_le(priv->r->mac_link_sts);
-	link = priv->r->get_port_reg_le(priv->r->mac_link_sts);
-	if (!(link & BIT_ULL(port)))
-		return;
-
-	state->link = 1;
-
-	if (priv->family_id == RTL9310_FAMILY_ID)
-		media = priv->r->get_port_reg_le(RTL931X_MAC_LINK_MEDIA_STS);
-
-	if (priv->family_id == RTL9300_FAMILY_ID)
-		media = sw_r32(RTL930X_MAC_LINK_MEDIA_STS);
-
-	pr_debug("%s: link state port %d: %llx, media %llx\n", __func__, port,
-		 link & BIT_ULL(port), media);
-
-	if (priv->r->get_port_reg_le(priv->r->mac_link_dup_sts) & BIT_ULL(port))
-		state->duplex = DUPLEX_FULL;
-	else
-		state->duplex = DUPLEX_HALF;
-
-	speed = priv->r->get_port_reg_le(priv->r->mac_link_spd_sts(port));
-	speed = (speed >> ((port % 8) << 2)) & 0xf;
-	switch (speed) {
-	case RTL_SPEED_10:
-		state->speed = SPEED_10;
-		break;
-	case RTL_SPEED_100:
-		state->speed = SPEED_100;
-		break;
-	case RTL_SPEED_1000:
-		state->speed = SPEED_1000;
-		break;
-	case RTL_SPEED_10000:
-		state->speed = SPEED_10000;
-		break;
-	case RTL_SPEED_2500:
-		state->speed = SPEED_2500;
-		break;
-	case RTL_SPEED_5000:
-		state->speed = SPEED_5000;
-		break;
-	default:
-		pr_err("%s: unknown speed: %d\n", __func__, (u32)speed & 0xf);
-	}
-
-	pr_debug("%s: speed is: %d %d\n", __func__, (u32)speed & 0xf, state->speed);
-	if (priv->r->get_port_reg_le(priv->r->mac_rx_pause_sts) & BIT_ULL(port))
-		state->pause |= MLO_PAUSE_RX;
-	if (priv->r->get_port_reg_le(priv->r->mac_tx_pause_sts) & BIT_ULL(port))
-		state->pause |= MLO_PAUSE_TX;
-}
-
-static int rtl83xx_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
-			      phy_interface_t interface,
-			      const unsigned long *advertising,
-			      bool permit_pause_to_mac)
-{
-	return 0;
-}
-
-static void rtl83xx_pcs_an_restart(struct phylink_pcs *pcs)
-{
-/* No restart functionality existed before we migrated to pcs */
-}
-
-static struct phylink_pcs *rtl83xx_phylink_mac_select_pcs(struct dsa_switch *ds,
-							  int port,
-							  phy_interface_t interface)
+static struct phylink_pcs *rtldsa_phylink_mac_select_pcs(struct dsa_switch *ds,
+							 int port,
+							 phy_interface_t interface)
 {
 	struct rtl838x_switch_priv *priv = ds->priv;
 
-	return &priv->pcs[port].pcs;
+	return priv->pcs[port];
 }
 
 static void rtl83xx_config_interface(int port, phy_interface_t interface)
@@ -2414,16 +2269,24 @@ out:
 	return err;
 }
 
-static int rtl83xx_port_mirror_add(struct dsa_switch *ds, int port,
-				   struct dsa_mall_mirror_tc_entry *mirror,
-				   bool ingress, struct netlink_ext_ack *extack)
+static int rtldsa_port_mirror_add(struct dsa_switch *ds, int port,
+				  struct dsa_mall_mirror_tc_entry *mirror,
+				  bool ingress, struct netlink_ext_ack *extack)
 {
 	/* We support 4 mirror groups, one destination port per group */
-	int group;
 	struct rtl838x_switch_priv *priv = ds->priv;
-	int ctrl_reg, dpm_reg, spm_reg;
+	struct rtldsa_mirror_config config;
+	int err = 0;
+	int pm_reg;
+	int group;
+	int r;
+
+	if (!priv->r->get_mirror_config)
+		return -EOPNOTSUPP;
 
 	pr_debug("In %s\n", __func__);
+
+	mutex_lock(&priv->reg_mutex);
 
 	for (group = 0; group < 4; group++) {
 		if (priv->mirror_group_ports[group] == mirror->to_local_port)
@@ -2436,77 +2299,80 @@ static int rtl83xx_port_mirror_add(struct dsa_switch *ds, int port,
 		}
 	}
 
-	if (group >= 4)
-		return -ENOSPC;
-
-	ctrl_reg = priv->r->mir_ctrl + group * 4;
-	dpm_reg = priv->r->mir_dpm + group * 4 * priv->port_width;
-	spm_reg = priv->r->mir_spm + group * 4 * priv->port_width;
+	if (group >= 4) {
+		err = -ENOSPC;
+		goto out_unlock;
+	}
 
 	pr_debug("Using group %d\n", group);
-	mutex_lock(&priv->reg_mutex);
 
-	if (priv->family_id == RTL8380_FAMILY_ID) {
-		/* Enable mirroring to port across VLANs (bit 11) */
-		sw_w32(1 << 11 | (mirror->to_local_port << 4) | 1, ctrl_reg);
-	} else {
-		/* Enable mirroring to destination port */
-		sw_w32((mirror->to_local_port << 4) | 1, ctrl_reg);
-	}
-
-	if (ingress && (priv->r->get_port_reg_be(spm_reg) & (1ULL << port))) {
-		mutex_unlock(&priv->reg_mutex);
-		return -EEXIST;
-	}
-	if ((!ingress) && (priv->r->get_port_reg_be(dpm_reg) & (1ULL << port))) {
-		mutex_unlock(&priv->reg_mutex);
-		return -EEXIST;
+	r = priv->r->get_mirror_config(&config, group, mirror->to_local_port);
+	if (r < 0) {
+		err = r;
+		goto out_unlock;
 	}
 
 	if (ingress)
-		priv->r->mask_port_reg_be(0, 1ULL << port, spm_reg);
+		pm_reg = config.spm;
 	else
-		priv->r->mask_port_reg_be(0, 1ULL << port, dpm_reg);
+		pm_reg = config.dpm;
 
+	sw_w32(config.val, config.ctrl);
+
+	if (priv->r->get_port_reg_be(pm_reg) & (1ULL << port)) {
+		err = -EEXIST;
+		goto out_unlock;
+	}
+
+	priv->r->mask_port_reg_be(0, 1ULL << port, pm_reg);
 	priv->mirror_group_ports[group] = mirror->to_local_port;
+
+out_unlock:
 	mutex_unlock(&priv->reg_mutex);
 
-	return 0;
+	return err;
 }
 
-static void rtl83xx_port_mirror_del(struct dsa_switch *ds, int port,
-				    struct dsa_mall_mirror_tc_entry *mirror)
+static void rtldsa_port_mirror_del(struct dsa_switch *ds, int port,
+				   struct dsa_mall_mirror_tc_entry *mirror)
 {
-	int group = 0;
 	struct rtl838x_switch_priv *priv = ds->priv;
-	int ctrl_reg, dpm_reg, spm_reg;
+	struct rtldsa_mirror_config config;
+	int group = 0;
+	int r;
+
+	if (!priv->r->get_mirror_config)
+		return;
 
 	pr_debug("In %s\n", __func__);
+
+	mutex_lock(&priv->reg_mutex);
+
 	for (group = 0; group < 4; group++) {
 		if (priv->mirror_group_ports[group] == mirror->to_local_port)
 			break;
 	}
 	if (group >= 4)
-		return;
+		goto out_unlock;
 
-	ctrl_reg = priv->r->mir_ctrl + group * 4;
-	dpm_reg = priv->r->mir_dpm + group * 4 * priv->port_width;
-	spm_reg = priv->r->mir_spm + group * 4 * priv->port_width;
+	r = priv->r->get_mirror_config(&config, group, mirror->to_local_port);
+	if (r < 0)
+		goto out_unlock;
 
-	mutex_lock(&priv->reg_mutex);
 	if (mirror->ingress) {
 		/* Ingress, clear source port matrix */
-		priv->r->mask_port_reg_be(1ULL << port, 0, spm_reg);
+		priv->r->mask_port_reg_be(1ULL << port, 0, config.spm);
 	} else {
 		/* Egress, clear destination port matrix */
-		priv->r->mask_port_reg_be(1ULL << port, 0, dpm_reg);
+		priv->r->mask_port_reg_be(1ULL << port, 0, config.dpm);
 	}
 
-	if (!(sw_r32(spm_reg) || sw_r32(dpm_reg))) {
+	if (!(sw_r32(config.spm) || sw_r32(config.dpm))) {
 		priv->mirror_group_ports[group] = -1;
-		sw_w32(0, ctrl_reg);
+		sw_w32(0, config.ctrl);
 	}
 
+out_unlock:
 	mutex_unlock(&priv->reg_mutex);
 }
 
@@ -2678,12 +2544,6 @@ static int rtldsa_phy_write(struct dsa_switch *ds, int addr, int regnum, u16 val
 	return mdiobus_write_nested(priv->parent_bus, addr, regnum, val);
 }
 
-const struct phylink_pcs_ops rtl83xx_pcs_ops = {
-	.pcs_an_restart		= rtl83xx_pcs_an_restart,
-	.pcs_get_state		= rtldsa_83xx_pcs_get_state,
-	.pcs_config		= rtl83xx_pcs_config,
-};
-
 const struct dsa_switch_ops rtl83xx_switch_ops = {
 	.get_tag_protocol	= rtl83xx_get_tag_protocol,
 	.setup			= rtl83xx_setup,
@@ -2695,7 +2555,7 @@ const struct dsa_switch_ops rtl83xx_switch_ops = {
 	.phylink_mac_config	= rtl83xx_phylink_mac_config,
 	.phylink_mac_link_down	= rtl83xx_phylink_mac_link_down,
 	.phylink_mac_link_up	= rtl83xx_phylink_mac_link_up,
-	.phylink_mac_select_pcs	= rtl83xx_phylink_mac_select_pcs,
+	.phylink_mac_select_pcs	= rtldsa_phylink_mac_select_pcs,
 
 	.get_strings		= rtldsa_get_strings,
 	.get_ethtool_stats	= rtldsa_get_ethtool_stats,
@@ -2730,8 +2590,8 @@ const struct dsa_switch_ops rtl83xx_switch_ops = {
 	.port_mdb_add		= rtl83xx_port_mdb_add,
 	.port_mdb_del		= rtl83xx_port_mdb_del,
 
-	.port_mirror_add	= rtl83xx_port_mirror_add,
-	.port_mirror_del	= rtl83xx_port_mirror_del,
+	.port_mirror_add	= rtldsa_port_mirror_add,
+	.port_mirror_del	= rtldsa_port_mirror_del,
 
 	.port_lag_change	= rtl83xx_port_lag_change,
 	.port_lag_join		= rtl83xx_port_lag_join,
@@ -2739,12 +2599,6 @@ const struct dsa_switch_ops rtl83xx_switch_ops = {
 
 	.port_pre_bridge_flags	= rtl83xx_port_pre_bridge_flags,
 	.port_bridge_flags	= rtl83xx_port_bridge_flags,
-};
-
-const struct phylink_pcs_ops rtl93xx_pcs_ops = {
-	.pcs_an_restart		= rtl83xx_pcs_an_restart,
-	.pcs_get_state		= rtldsa_93xx_pcs_get_state,
-	.pcs_config		= rtl83xx_pcs_config,
 };
 
 const struct dsa_switch_ops rtl930x_switch_ops = {
@@ -2758,7 +2612,7 @@ const struct dsa_switch_ops rtl930x_switch_ops = {
 	.phylink_mac_config	= rtl93xx_phylink_mac_config,
 	.phylink_mac_link_down	= rtl93xx_phylink_mac_link_down,
 	.phylink_mac_link_up	= rtl93xx_phylink_mac_link_up,
-	.phylink_mac_select_pcs	= rtl83xx_phylink_mac_select_pcs,
+	.phylink_mac_select_pcs	= rtldsa_phylink_mac_select_pcs,
 
 	.get_strings		= rtldsa_get_strings,
 	.get_ethtool_stats	= rtldsa_get_ethtool_stats,
@@ -2792,6 +2646,9 @@ const struct dsa_switch_ops rtl930x_switch_ops = {
 
 	.port_mdb_add		= rtl83xx_port_mdb_add,
 	.port_mdb_del		= rtl83xx_port_mdb_del,
+
+	.port_mirror_add	= rtldsa_port_mirror_add,
+	.port_mirror_del	= rtldsa_port_mirror_del,
 
 	.port_lag_change	= rtl83xx_port_lag_change,
 	.port_lag_join		= rtl83xx_port_lag_join,
