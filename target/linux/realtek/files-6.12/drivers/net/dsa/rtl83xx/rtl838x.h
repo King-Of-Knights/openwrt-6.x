@@ -582,6 +582,17 @@ typedef enum {
 #define RTL931X_LED_PORT_FIB_MASK_CTRL		(0x065c)
 #define RTL931X_LED_PORT_COMBO_MASK_CTRL	(0x0664)
 
+#define RTL931X_LED_GLB_ACTIVE_LOW BIT(21)
+
+#define RTL931X_LED_SETX_0_CTRL(x) (RTL931X_LED_SET0_0_CTRL - (x * 8))
+#define RTL931X_LED_SETX_1_CTRL(x) (RTL931X_LED_SETX_0_CTRL(x) - 4)
+
+/* get register for given set and led in the set */
+#define RTL931X_LED_SETX_LEDY(x,y) (RTL931X_LED_SETX_0_CTRL(x) - 4 * (y / 2))
+
+/* get shift for given led in any set */
+#define RTL931X_LED_SET_LEDX_SHIFT(x) (16 * (x % 2))
+
 #define MAX_VLANS 4096
 #define MAX_LAGS 16
 #define MAX_PRIOS 8
@@ -669,14 +680,15 @@ struct rtldsa_counter_state {
 };
 
 struct rtl838x_port {
-	bool enable;
+	bool enable:1;
+	bool phy_is_integrated:1;
+	bool is10G:1;
+	bool is2G5:1;
+	bool isolated:1;
 	u64 pm;
 	u16 pvid;
 	bool eee_enabled;
 	enum phy_type phy;
-	bool phy_is_integrated;
-	bool is10G;
-	bool is2G5;
 	int sds_num;
 	int led_set;
 	int leds_on_this_port;
@@ -1029,7 +1041,6 @@ struct rtl838x_reg {
 	void (*traffic_enable)(int source, int dest);
 	void (*traffic_disable)(int source, int dest);
 	void (*traffic_set)(int source, u64 dest_matrix);
-	u64 (*traffic_get)(int source);
 	int l2_ctrl_0;
 	int l2_ctrl_1;
 	int smi_poll_ctrl;

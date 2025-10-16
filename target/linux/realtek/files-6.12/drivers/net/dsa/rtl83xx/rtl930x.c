@@ -755,19 +755,6 @@ void rtldsa_930x_set_receive_management_action(int port, rma_ctrl_t type,
 	}
 }
 
-static u64 rtl930x_traffic_get(int source)
-{
-	u32 v;
-	struct table_reg *r = rtl_table_get(RTL9300_TBL_0, 6);
-
-	rtl_table_read(r, source);
-	v = sw_r32(rtl_table_data(r, 0));
-	rtl_table_release(r);
-	v = v >> 3;
-
-	return v;
-}
-
 /* Enable traffic between a source port and a destination port matrix */
 static void rtl930x_traffic_set(int source, u64 dest_matrix)
 {
@@ -2339,10 +2326,33 @@ static void rtl930x_set_distribution_algorithm(int group, int algoidx, u32 algom
 	sw_w32(newmask << l3shift, RTL930X_TRK_HASH_CTRL + (algoidx << 2));
 }
 
+static void rtldsa_930x_led_get_forced(const struct device_node *node,
+				       const u8 leds_in_set[4],
+				       u8 forced_leds_per_port[RTL930X_CPU_PORT])
+{
+	DECLARE_BITMAP(mask, RTL930X_CPU_PORT);
+	unsigned int port;
+	char set_str[36];
+	u32 pm;
+
+	for (u8 set = 0; set < 4; set++) {
+		snprintf(set_str, sizeof(set_str), "realtek,led-set%d-force-port-mask", set);
+		if (of_property_read_u32(node, set_str, &pm))
+			continue;
+
+		bitmap_from_arr32(mask, &pm, RTL930X_CPU_PORT);
+
+		for_each_set_bit(port, mask, RTL930X_CPU_PORT)
+			forced_leds_per_port[port] = leds_in_set[set];
+	}
+}
+
 static void rtl930x_led_init(struct rtl838x_switch_priv *priv)
 {
+	u8 forced_leds_per_port[RTL930X_CPU_PORT] = {};
 	struct device_node *node;
 	struct device *dev = priv->dev;
+	u8 leds_in_set[4] = {};
 	u32 pm = 0;
 
 	node = of_find_compatible_node(NULL, NULL, "realtek,rtl9300-leds");
@@ -2360,35 +2370,38 @@ static void rtl930x_led_init(struct rtl838x_switch_priv *priv)
 		sw_w32(0, RTL930X_LED_SETX_0_CTRL(set));
 		sw_w32(0, RTL930X_LED_SETX_1_CTRL(set));
 
-		/**
-		 * Each led set has 4 number of leds, and each LED is configured with 16 bits
-		 * So each 32bit register holds configuration for 2 leds
-		 * And therefore each set requires 2 registers for configuring 4 LEDs
-		 *
-		*/
-		sprintf(set_name, "led_set%d", set);
+		/* Each LED set has (up to) 4 LEDs, and each LED is configured
+		 * with 16 bits. So each 32 bit register holds configuration for
+		 * 2 LEDs. Therefore, each set requires 2 registers for
+		 * configuring all 4 LEDs.
+		 */
+		snprintf(set_name, sizeof(set_name), "led_set%d", set);
 		leds_in_this_set = of_property_count_u32_elems(node, set_name);
 
-		if (leds_in_this_set <= 0 || leds_in_this_set > sizeof(set_config)) {
+		if (leds_in_this_set <= 0 || leds_in_this_set > ARRAY_SIZE(set_config)) {
 			if (leds_in_this_set != -EINVAL) {
 				dev_err(dev, "%s invalid, skipping this set, leds_in_this_set=%d, should be (0, %d]\n",
-					set_name, leds_in_this_set, sizeof(set_config));
+					set_name, leds_in_this_set, ARRAY_SIZE(set_config));
 			}
+
 			continue;
 		}
+
 		dev_info(dev, "%s has %d LEDs configured\n", set_name, leds_in_this_set);
+		leds_in_set[set] = leds_in_this_set;
 
-		if (of_property_read_u32_array(node, set_name, set_config, leds_in_this_set)) {
+		if (of_property_read_u32_array(node, set_name, set_config, leds_in_this_set))
 			break;
-		}
 
-		/* Write configuration as per number of LEDs */
-		for (int i=0, led = leds_in_this_set-1; led >= 0; led--,i++) {
+		/* Write configuration for selected LEDs */
+		for (int i = 0, led = leds_in_this_set - 1; led >= 0; led--, i++) {
 			sw_w32_mask(0xffff << RTL930X_LED_SET_LEDX_SHIFT(led),
-						(0xffff & set_config[i]) << RTL930X_LED_SET_LEDX_SHIFT(led),
-						RTL930X_LED_SETX_LEDY(set, led));
+				    (0xffff & set_config[i]) << RTL930X_LED_SET_LEDX_SHIFT(led),
+				    RTL930X_LED_SETX_LEDY(set, led));
 		}
 	}
+
+	rtldsa_930x_led_get_forced(node, leds_in_set, forced_leds_per_port);
 
 	for (int i = 0; i < priv->cpu_port; i++) {
 		int pos = (i << 1) % 32;
@@ -2397,8 +2410,11 @@ static void rtl930x_led_init(struct rtl838x_switch_priv *priv)
 		sw_w32_mask(0x3 << pos, 0, RTL930X_LED_PORT_FIB_SET_SEL_CTRL(i));
 		sw_w32_mask(0x3 << pos, 0, RTL930X_LED_PORT_COPR_SET_SEL_CTRL(i));
 
-		if (!priv->ports[i].phy)
+		if (!priv->ports[i].phy && !(forced_leds_per_port[i]))
 			continue;
+
+		if (forced_leds_per_port[i] > 0)
+			priv->ports[i].leds_on_this_port = forced_leds_per_port[i];
 
 		/* 0x0 = 1 led, 0x1 = 2 leds, 0x2 = 3 leds, 0x3 = 4 leds per port */
 		sw_w32_mask(0x3 << pos, (priv->ports[i].leds_on_this_port -1) << pos, RTL930X_LED_PORT_NUM_CTRL(i));
@@ -2441,7 +2457,6 @@ const struct rtl838x_reg rtl930x_reg = {
 	.stat_port_prv_mib = RTL930X_STAT_PORT_PRVTE_CNTR,
 	.traffic_enable = rtl930x_traffic_enable,
 	.traffic_disable = rtl930x_traffic_disable,
-	.traffic_get = rtl930x_traffic_get,
 	.traffic_set = rtl930x_traffic_set,
 	.l2_ctrl_0 = RTL930X_L2_CTRL,
 	.l2_ctrl_1 = RTL930X_L2_AGE_CTRL,
