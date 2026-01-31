@@ -9,7 +9,8 @@ board=$(board_name)
 case "$FIRMWARE" in
 "mediatek/mt7981_eeprom_mt7976_dbdc.bin")
 	case "$board" in
-	mercusys,mr80x-v3)
+	mercusys,mr80x-v3|\
+	mercusys,mr85x)
 		ln -sf /tmp/tp_data/MT7981_EEPROM.bin \
 			/lib/firmware/$FIRMWARE
 		;;
@@ -31,6 +32,14 @@ case "$FIRMWARE" in
 	case "$board" in
 	tplink,archer-ax80-v1)
 		ln -sf /tmp/tp_data/MT7986_EEPROM.bin \
+			/lib/firmware/$FIRMWARE
+		;;
+	esac
+	;;
+"mediatek/mt7996/mt7992_eeprom.bin")
+	case "$board" in
+	tplink,be450)
+		ln -sf /tmp/tp_data/MT7992_EEPROM.bin \
 			/lib/firmware/$FIRMWARE
 		;;
 	esac

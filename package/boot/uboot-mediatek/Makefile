@@ -291,6 +291,18 @@ define U-Boot/mt7981_cmcc_rax3000m-nand-ddr4
   DEPENDS:=+trusted-firmware-a-mt7981-spim-nand-ddr4
 endef
 
+define U-Boot/mt7981_comfast_cf-wr632ax
+  NAME:=COMFAST CF-WR632AX
+  BUILD_SUBTARGET:=filogic
+  BUILD_DEVICES:=comfast_cf-wr632ax-ubootmod
+  UBOOT_CONFIG:=mt7981_comfast_cf-wr632ax
+  UBOOT_IMAGE:=u-boot.fip
+  BL2_BOOTDEV:=spim-nand
+  BL2_SOC:=mt7981
+  BL2_DDRTYPE:=ddr3
+  DEPENDS:=+trusted-firmware-a-mt7981-spim-nand-ddr3
+endef
+
 define U-Boot/mt7981_cudy_tr3000-v1
   NAME:=Cudy TR3000 v1
   BUILD_SUBTARGET:=filogic
@@ -343,6 +355,18 @@ define U-Boot/mt7981_h3c_magic-nx30-pro
   BUILD_SUBTARGET:=filogic
   BUILD_DEVICES:=h3c_magic-nx30-pro
   UBOOT_CONFIG:=mt7981_h3c_magic-nx30-pro
+  UBOOT_IMAGE:=u-boot.fip
+  BL2_BOOTDEV:=spim-nand
+  BL2_SOC:=mt7981
+  BL2_DDRTYPE:=ddr3
+  DEPENDS:=+trusted-firmware-a-mt7981-spim-nand-ddr3
+endef
+
+define U-Boot/mt7981_imou_hx21
+  NAME:=Imou HX21
+  BUILD_SUBTARGET:=filogic
+  BUILD_DEVICES:=imou_hx21
+  UBOOT_CONFIG:=mt7981_imou_hx21
   UBOOT_IMAGE:=u-boot.fip
   BL2_BOOTDEV:=spim-nand
   BL2_SOC:=mt7981
@@ -785,6 +809,55 @@ define U-Boot/mt7986_zyxel_ex5601-t0
   DEPENDS:=+trusted-firmware-a-mt7986-spim-nand-4k-ddr4
 endef
 
+define U-Boot/mt7987_bananapi_bpi-r4-lite-emmc
+  NAME:=BananaPi BPi-R4 Lite
+  BUILD_SUBTARGET:=filogic
+  BUILD_DEVICES:=bananapi_bpi-r4-lite
+  UBOOT_CONFIG:=mt7987a_bpi-r4-lite-emmc
+  UBOOT_IMAGE:=u-boot.fip
+  BL2_BOOTDEV:=emmc
+  BL2_SOC:=mt7987
+  BL2_DDRTYPE:=comb
+  DEPENDS:=+trusted-firmware-a-mt7987-emmc-comb
+endef
+
+define U-Boot/mt7987_bananapi_bpi-r4-lite-sdmmc
+  NAME:=BananaPi BPi-R4 Lite
+  BUILD_SUBTARGET:=filogic
+  BUILD_DEVICES:=bananapi_bpi-r4-lite
+  UBOOT_CONFIG:=mt7987a_bpi-r4-lite-sd
+  UBOOT_IMAGE:=u-boot.fip
+  BL2_BOOTDEV:=sdmmc
+  BL2_SOC:=mt7987
+  BL2_DDRTYPE:=comb
+  DEPENDS:=+trusted-firmware-a-mt7987-sdmmc-comb
+endef
+
+define U-Boot/mt7987_bananapi_bpi-r4-lite-snand
+  NAME:=BananaPi BPi-R4 Lite
+  BUILD_SUBTARGET:=filogic
+  BUILD_DEVICES:=bananapi_bpi-r4-lite
+  UBOOT_CONFIG:=mt7987a_bpi-r4-lite-snand
+  UBOOT_IMAGE:=u-boot.fip
+  BL2_BOOTDEV:=spim-nand2-ubi
+  BL2_SOC:=mt7987
+  BL2_DDRTYPE:=comb
+  DEPENDS:=+trusted-firmware-a-mt7987-spim-nand2-ubi-comb
+endef
+
+define U-Boot/mt7987_bananapi_bpi-r4-lite-nor
+  NAME:=BananaPi BPi-R4 Lite
+  BUILD_SUBTARGET:=filogic
+  BUILD_DEVICES:=bananapi_bpi-r4-lite
+  UBOOT_CONFIG:=mt7987a_bpi-r4-lite-nor
+  UBOOT_IMAGE:=u-boot.fip
+  BL2_BOOTDEV:=nor
+  BL2_SOC:=mt7987
+  BL2_DDRTYPE:=comb
+  DEPENDS:=+trusted-firmware-a-mt7987-nor-comb
+  FIP_COMPRESS:=1
+endef
+
 define U-Boot/mt7988_arcadyan_mozart
   NAME:=Arcadyan Mozart
   BUILD_SUBTARGET:=filogic
@@ -881,6 +954,42 @@ define U-Boot/mt7988_bananapi_bpi-r4-poe-snand
   DEPENDS:=+trusted-firmware-a-mt7988-spim-nand-ubi-comb
 endef
 
+define U-Boot/mt7987_rfb-emmc
+  NAME:=MT7987 Reference Board
+  BUILD_SUBTARGET:=filogic
+  BUILD_DEVICES:=mediatek_mt7987a-rfb
+  UBOOT_CONFIG:=mt7987_emmc_rfb
+  UBOOT_IMAGE:=u-boot.fip
+  BL2_BOOTDEV:=sdmmc
+  BL2_SOC:=mt7987
+  BL2_DDRTYPE:=comb
+  DEPENDS:=+trusted-firmware-a-mt7987-emmc-comb
+endef
+
+define U-Boot/mt7987_rfb-spim-nand
+  NAME:=MT7987 Reference Board
+  BUILD_SUBTARGET:=filogic
+  BUILD_DEVICES:=mediatek_mt7987a-rfb
+  UBOOT_CONFIG:=mt7987_rfb
+  UBOOT_IMAGE:=u-boot.fip
+  BL2_BOOTDEV:=spim-nand0-ubi
+  BL2_SOC:=mt7987
+  BL2_DDRTYPE:=comb
+  DEPENDS:=+trusted-firmware-a-mt7987-spim-nand0-ubi-comb
+endef
+
+define U-Boot/mt7987_rfb-sd
+  NAME:=MT7987 Reference Board
+  BUILD_SUBTARGET:=filogic
+  BUILD_DEVICES:=mediatek_mt7987a-rfb
+  UBOOT_CONFIG:=mt7987_sd_rfb
+  UBOOT_IMAGE:=u-boot.fip
+  BL2_BOOTDEV:=sdmmc
+  BL2_SOC:=mt7987
+  BL2_DDRTYPE:=comb
+  DEPENDS:=+trusted-firmware-a-mt7987-sdmmc-comb
+endef
+
 define U-Boot/mt7988_rfb-spim-nand
   NAME:=MT7988 Reference Board
   BUILD_SUBTARGET:=filogic
@@ -968,12 +1077,14 @@ UBOOT_TARGETS := \
 	mt7981_cmcc_rax3000m-emmc-ddr4 \
 	mt7981_cmcc_rax3000m-nand-ddr3 \
 	mt7981_cmcc_rax3000m-nand-ddr4 \
+	mt7981_comfast_cf-wr632ax \
 	mt7981_cudy_tr3000-v1 \
 	mt7981_gatonetworks_gdsp \
 	mt7981_glinet_gl-mt2500 \
 	mt7981_glinet_gl-x3000 \
 	mt7981_glinet_gl-xe3000 \
 	mt7981_h3c_magic-nx30-pro \
+	mt7981_imou_hx21 \
 	mt7981_jcg_q30-pro \
 	mt7981_konka_komi-a31 \
 	mt7981_netis_nx31 \
@@ -1009,6 +1120,13 @@ UBOOT_TARGETS := \
 	mt7986_xiaomi_redmi-router-ax6000 \
 	mt7986_zyxel_ex5601-t0 \
 	mt7986_rfb \
+	mt7987_bananapi_bpi-r4-lite-emmc \
+	mt7987_bananapi_bpi-r4-lite-sdmmc \
+	mt7987_bananapi_bpi-r4-lite-snand \
+	mt7987_bananapi_bpi-r4-lite-nor \
+	mt7987_rfb-emmc \
+	mt7987_rfb-sd \
+	mt7987_rfb-spim-nand \
 	mt7988_arcadyan_mozart \
 	mt7988_asus_zenwifi-bt8 \
 	mt7988_bananapi_bpi-r4-emmc \

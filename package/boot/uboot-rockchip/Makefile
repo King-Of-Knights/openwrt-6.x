@@ -165,6 +165,31 @@ define U-Boot/rockpro64-rk3399
 endef
 
 
+# RK3528 boards
+
+define U-Boot/rk3528/Default
+  BUILD_SUBTARGET:=armv8
+  DEPENDS:=+PACKAGE_u-boot-$(1):trusted-firmware-a-rk3528
+  ATF:=rk3528_bl31_v1.20.elf
+  TPL:=rk3528_ddr_1056MHz_v1.11.bin
+endef
+
+define U-Boot/radxa-e20c-rk3528
+  $(U-Boot/rk3528/Default)
+  NAME:=E20C
+  BUILD_DEVICES:= \
+    radxa_e20c
+endef
+
+define U-Boot/rock-2-rk3528
+  $(U-Boot/rk3528/Default)
+  NAME:=ROCK 2A/2F
+  BUILD_DEVICES:= \
+    radxa_rock-2a \
+    radxa_rock-2f
+endef
+
+
 # RK3566 boards
 
 define U-Boot/rk3566/Default
@@ -217,6 +242,13 @@ define U-Boot/bpi-r2-pro-rk3568
   NAME:=Bananapi-R2 Pro
   BUILD_DEVICES:= \
     sinovoip_bpi-r2-pro
+endef
+
+define U-Boot/easepi-r1-rk3568
+  $(U-Boot/rk3568/Default)
+  NAME:=LinkEase EasePi R1
+  BUILD_DEVICES:= \
+    linkease_easepi-r1
 endef
 
 define U-Boot/fastrhino-r66s-rk3568
@@ -388,11 +420,14 @@ UBOOT_TARGETS := \
   rock64-rk3328 \
   rock-pi-e-rk3328 \
   rock-pi-e-v3-rk3328 \
+  radxa-e20c-rk3528 \
+  rock-2-rk3528 \
   nanopi-r3s-rk3566 \
   radxa-cm3-io-rk3566 \
   radxa-zero-3-rk3566 \
   rock-3c-rk3566 \
   bpi-r2-pro-rk3568 \
+  easepi-r1-rk3568 \
   fastrhino-r66s-rk3568 \
   nanopi-r5c-rk3568 \
   nanopi-r5s-rk3568 \

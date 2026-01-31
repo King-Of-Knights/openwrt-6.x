@@ -26,8 +26,10 @@ abt,asr3000|\
 acer,predator-w6x-ubootmod|\
 asus,zenwifi-bt8-ubootmod|\
 cmcc,a10-ubootmod|\
+comfast,cf-wr632ax-ubootmod|\
 cudy,tr3000-v1-ubootmod|\
 h3c,magic-nx30-pro|\
+imou,hx21|\
 jcg,q30-pro|\
 konka,komi-a31|\
 mercusys,mr90x-v1-ubi|\
@@ -65,6 +67,7 @@ asus,rt-ax59u)
 bananapi,bpi-r3|\
 bananapi,bpi-r3-mini|\
 bananapi,bpi-r4|\
+bananapi,bpi-r4-lite|\
 bananapi,bpi-r4-poe|\
 cmcc,rax3000m|\
 jdcloud,re-cp-03)
@@ -85,6 +88,7 @@ jdcloud,re-cp-03)
 	;;
 buffalo,wsr-6000ax8|\
 mercusys,mr80x-v3|\
+mercusys,mr85x|\
 mercusys,mr90x-v1|\
 routerich,ax3000|\
 routerich,ax3000-v1|\
@@ -98,6 +102,7 @@ iptime,ax3000m)
 	;;
 asiarf,ap7986-003|\
 cetron,ct3003|\
+comfast,cf-wr632ax|\
 edgecore,eap111|\
 netgear,wax220|\
 zbtlink,zbt-z8102ax|\
@@ -126,7 +131,8 @@ smartrg,sdg-8733a|\
 smartrg,sdg-8734)
 	ubootenv_add_mmc "u-boot-env" "mmcblk0" "0x0" "0x8000" "0x8000"
 	;;
-tplink,archer-ax80-v1)
+tplink,archer-ax80-v1|\
+tplink,be450)
 	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x20000" "0x20000" "8"
 	;;
 ubnt,unifi-6-plus)

@@ -176,7 +176,7 @@ function setup_sta(data, config) {
 	network_append_string_vars(config, [ 'ssid' ]);
 	network_append_vars(config, [
 		'rsn_overriding', 'scan_ssid', 'noscan', 'disabled', 'multi_ap_profile', 'multi_ap_backhaul_sta',
-		'ocv', 'key_mgmt', 'sae_pwe', 'psk', 'sae_password', 'pairwise', 'group', 'bssid',
+		'ocv', 'beacon_prot', 'key_mgmt', 'sae_pwe', 'psk', 'sae_password', 'pairwise', 'group', 'bssid',
 		'proto', 'mesh_fwding', 'mesh_rssi_threshold', 'frequency', 'fixed_freq',
 		'disable_ht', 'disable_ht40', 'disable_vht', 'vht', 'max_oper_chwidth',
 		'ht40', 'beacon_int', 'ieee80211w', 'basic_rate', 'mcast_rate',
@@ -270,6 +270,8 @@ export function generate(config_list, data, interface) {
 };
 
 export function setup(config, data) {
+	if (!global.ubus.list('wpa_supplicant'))
+		system('ubus wait_for wpa_supplicant');
 	let ret = global.ubus.call('wpa_supplicant', 'config_set', {
 		phy: data.phy,
 		radio: data.config.radio,
@@ -281,7 +283,7 @@ export function setup(config, data) {
 
 	if (ret)
 		netifd.add_process('/usr/sbin/wpa_supplicant', ret.pid, true, true);
-	else if (fs.access('/usr/sbin/wpa_supplicant', 'x'))
+	else
 		netifd.setup_failed('SUPPLICANT_START_FAILED');
 };
 

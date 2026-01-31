@@ -30,6 +30,12 @@ define Device/plasmacloud-common
   IMAGE/sysupgrade.bin := append-rootfs | pad-rootfs | sysupgrade-tar rootfs=$$$$@ | append-metadata
 endef
 
+define Device/plasmacloud_mcx3
+  $(Device/plasmacloud-common)
+  DEVICE_MODEL := MCX3
+endef
+TARGET_DEVICES += plasmacloud_mcx3
+
 define Device/plasmacloud_psx8
   $(Device/plasmacloud-common)
   DEVICE_MODEL := PSX8
@@ -97,6 +103,18 @@ define Device/xikestor_sks8310-8x
     append-metadata
 endef
 TARGET_DEVICES += xikestor_sks8310-8x
+
+define Device/zyxel_xgs1010-12-a1
+  SOC := rtl9302
+  UIMAGE_MAGIC := 0x93001010
+  DEVICE_VENDOR := Zyxel
+  DEVICE_MODEL := XGS1010-12
+  DEVICE_VARIANT := A1
+  KERNEL_SIZE := 7168k
+  IMAGE_SIZE := 13184k
+  $(Device/kernel-lzma)
+endef
+TARGET_DEVICES += zyxel_xgs1010-12-a1
 
 define Device/zyxel_xgs1210-12-a1
   $(Device/zyxel_xgs1210-12)

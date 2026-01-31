@@ -179,6 +179,8 @@ function mld_add(data, phy_list)
 	}
 
 	let wdev_config = { ...data.config, radio_mask: data.radio_mask };
+	if (!wdev_config.macaddr)
+		wdev_config.macaddr = phydev.macaddr_next();
 	let ret = phydev.wdev_add(name, wdev_config);
 	if (ret)
 		wpas.printf(`Failed to create device ${name}: ${ret}`);
@@ -732,6 +734,15 @@ function iface_ubus_remove(ifname)
 	delete wpas.data.iface_ubus[ifname];
 }
 
+function iface_ubus_notify(ifname, event)
+{
+	let obj = wpas.data.iface_ubus[ifname];
+	if (!obj)
+		return;
+
+	obj.notify('ctrl-event', { event }, null, null, null, -1);
+}
+
 function iface_ubus_add(ifname)
 {
 	let ubus = wpas.data.ubus;
@@ -812,6 +823,9 @@ return {
 	iface_remove: function(name, obj) {
 		iface_event("remove", name);
 		iface_ubus_remove(name);
+	},
+	ctrl_event: function(name, iface, ev) {
+		iface_ubus_notify(name, ev);
 	},
 	state: function(ifname, iface, state) {
 		let event_data = iface.status();
