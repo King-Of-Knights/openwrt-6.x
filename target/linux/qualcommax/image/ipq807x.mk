@@ -242,7 +242,7 @@ define Device/linksys_mx5300
 	$(call Device/linksys_mx)
 	DEVICE_MODEL := MX5300
 	DEVICE_PACKAGES += kmod-rtc-ds1307 ipq-wifi-linksys_mx5300 \
-		kmod-ath10k-ct ath10k-firmware-qca9984-ct
+		kmod-ath10k ath10k-firmware-qca9984
 endef
 TARGET_DEVICES += linksys_mx5300
 
@@ -405,6 +405,21 @@ define Device/spectrum_sax1v1k
 endef
 TARGET_DEVICES += spectrum_sax1v1k
 
+define Device/tcl_linkhub-hh500v
+	$(call Device/FitImage)
+	$(call Device/UbiFit)
+	DEVICE_VENDOR := TCL
+	DEVICE_MODEL := LINKHUB HH500V
+	BLOCKSIZE := 128k
+	PAGESIZE := 2048
+	DEVICE_DTS_CONFIG := config@hk09
+	SOC := ipq8072
+	IMAGES += factory.bin
+	IMAGE/factory.bin := append-ubi | qsdk-ipq-factory-nand
+	DEVICE_PACKAGES := ipq-wifi-tcl_linkhub-hh500v kmod-mhi-pci-generic \
+		kmod-mhi-wwan-ctrl kmod-mhi-wwan-mbim
+endef
+TARGET_DEVICES += tcl_linkhub-hh500v
 
 define Device/tplink_deco-x80-5g
 	$(call Device/FitImage)
@@ -462,7 +477,7 @@ define Device/xiaomi_ax3600
 	DEVICE_DTS_CONFIG := config@ac04
 	SOC := ipq8071
 	KERNEL_SIZE := 36608k
-	DEVICE_PACKAGES := ipq-wifi-xiaomi_ax3600 kmod-ath10k-ct-smallbuffers ath10k-firmware-qca9887-ct
+	DEVICE_PACKAGES := ipq-wifi-xiaomi_ax3600 kmod-ath10k-smallbuffers ath10k-firmware-qca9887
 ifeq ($(IB),)
 ifneq ($(CONFIG_TARGET_ROOTFS_INITRAMFS),)
 	ARTIFACTS := initramfs-factory.ubi
@@ -483,7 +498,7 @@ define Device/xiaomi_ax9000
 	SOC := ipq8072
 	KERNEL_SIZE := 57344k
 	DEVICE_PACKAGES := ipq-wifi-xiaomi_ax9000 kmod-ath11k-pci ath11k-firmware-qcn9074 \
-		kmod-ath10k-ct ath10k-firmware-qca9887-ct
+		kmod-ath10k ath10k-firmware-qca9887
 ifeq ($(IB),)
 ifneq ($(CONFIG_TARGET_ROOTFS_INITRAMFS),)
 	ARTIFACTS := initramfs-factory.ubi

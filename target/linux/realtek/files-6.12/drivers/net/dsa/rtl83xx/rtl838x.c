@@ -562,16 +562,20 @@ static void rtl838x_set_static_move_action(int port, bool forward)
 		    RTL838X_L2_PORT_STATIC_MV_ACT(port));
 }
 
-static void rtl838x_stp_get(struct rtl838x_switch_priv *priv, u16 msti, u32 port_state[])
+static int rtldsa_838x_stp_get(struct rtl838x_switch_priv *priv, u16 msti, int port, u32 port_state[])
 {
+	int idx = 1 - (port / 16);
+	int bit = 2 * (port % 16);
 	u32 cmd = 1 << 15 | /* Execute cmd */
 		  1 << 14 | /* Read */
 		  2 << 12 | /* Table type 0b10 */
 		  (msti & 0xfff);
-	priv->r->exec_tbl0_cmd(cmd);
 
+	priv->r->exec_tbl0_cmd(cmd);
 	for (int i = 0; i < 2; i++)
 		port_state[i] = sw_r32(priv->r->tbl_access_data_0(i));
+
+	return (port_state[idx] >> bit) & 3;
 }
 
 static void rtl838x_stp_set(struct rtl838x_switch_priv *priv, u16 msti, u32 port_state[])
@@ -1709,7 +1713,7 @@ const struct rtl838x_reg rtl838x_reg = {
 	.enable_mcast_flood = rtl838x_enable_mcast_flood,
 	.enable_bcast_flood = rtl838x_enable_bcast_flood,
 	.set_static_move_action = rtl838x_set_static_move_action,
-	.stp_get = rtl838x_stp_get,
+	.stp_get = rtldsa_838x_stp_get,
 	.stp_set = rtl838x_stp_set,
 	.mac_port_ctrl = rtl838x_mac_port_ctrl,
 	.l2_port_new_salrn = rtl838x_l2_port_new_salrn,
@@ -1744,6 +1748,7 @@ const struct rtl838x_reg rtl838x_reg = {
 	.l3_setup = rtl838x_l3_setup,
 	.set_distribution_algorithm = rtl838x_set_distribution_algorithm,
 	.set_receive_management_action = rtl838x_set_receive_management_action,
+	.qos_init = rtldsa_838x_qos_init,
 };
 
 irqreturn_t rtl838x_switch_irq(int irq, void *dev_id)
@@ -1770,33 +1775,6 @@ irqreturn_t rtl838x_switch_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-void rtl8380_get_version(struct rtl838x_switch_priv *priv)
-{
-	u32 rw_save, info_save;
-	u32 info;
-
-	rw_save = sw_r32(RTL838X_INT_RW_CTRL);
-	sw_w32(rw_save | 0x3, RTL838X_INT_RW_CTRL);
-
-	info_save = sw_r32(RTL838X_CHIP_INFO);
-	sw_w32(info_save | 0xA0000000, RTL838X_CHIP_INFO);
-
-	info = sw_r32(RTL838X_CHIP_INFO);
-	sw_w32(info_save, RTL838X_CHIP_INFO);
-	sw_w32(rw_save, RTL838X_INT_RW_CTRL);
-
-	if ((info & 0xFFFF) == 0x6275) {
-		if (((info >> 16) & 0x1F) == 0x1)
-			priv->version = RTL8380_VERSION_A;
-		else if (((info >> 16) & 0x1F) == 0x2)
-			priv->version = RTL8380_VERSION_B;
-		else
-			priv->version = RTL8380_VERSION_B;
-	} else {
-		priv->version = '-';
-	}
-}
-
 void rtl838x_vlan_profile_dump(int profile)
 {
 	u32 p;
@@ -1810,31 +1788,3 @@ void rtl838x_vlan_profile_dump(int profile)
 		 profile, p & 1, (p >> 1) & 0x1ff, (p >> 10) & 0x1ff, (p >> 19) & 0x1ff);
 }
 
-void rtl8380_sds_rst(int mac)
-{
-	u32 offset = (mac == 24) ? 0 : 0x100;
-
-	sw_w32_mask(1 << 11, 0, RTL838X_SDS4_FIB_REG0 + offset);
-	sw_w32_mask(0x3, 0, RTL838X_SDS4_REG28 + offset);
-	sw_w32_mask(0x3, 0x3, RTL838X_SDS4_REG28 + offset);
-	sw_w32_mask(0, 0x1 << 6, RTL838X_SDS4_DUMMY0 + offset);
-	sw_w32_mask(0x1 << 6, 0, RTL838X_SDS4_DUMMY0 + offset);
-	pr_debug("SERDES reset: %d\n", mac);
-}
-
-int rtl8380_sds_power(int mac, int val)
-{
-	u32 mode = (val == 1) ? 0x4 : 0x9;
-	u32 offset = (mac == 24) ? 5 : 0;
-
-	if ((mac != 24) && (mac != 26)) {
-		pr_err("%s: not a fibre port: %d\n", __func__, mac);
-		return -1;
-	}
-
-	sw_w32_mask(0x1f << offset, mode << offset, RTL838X_SDS_MODE_SEL);
-
-	rtl8380_sds_rst(mac);
-
-	return 0;
-}

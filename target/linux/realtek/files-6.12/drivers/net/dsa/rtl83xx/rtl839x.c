@@ -624,38 +624,6 @@ irqreturn_t rtl839x_switch_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-/* TODO: unused */
-int rtl8390_sds_power(int mac, int val)
-{
-	u32 offset = (mac == 48) ? 0x0 : 0x100;
-	u32 mode = val ? 0 : 1;
-
-	pr_debug("In %s: mac %d, set %d\n", __func__, mac, val);
-
-	if ((mac != 48) && (mac != 49)) {
-		pr_err("%s: not an SFP port: %d\n", __func__, mac);
-		return -1;
-	}
-
-	/* Set bit 1003. 1000 starts at 7c */
-	sw_w32_mask(BIT(11), mode << 11, RTL839X_SDS12_13_PWR0 + offset);
-
-	return 0;
-}
-
-void rtl8390_get_version(struct rtl838x_switch_priv *priv)
-{
-	u32 info, model;
-
-	sw_w32_mask(0xf << 28, 0xa << 28, RTL839X_CHIP_INFO);
-	info = sw_r32(RTL839X_CHIP_INFO);
-
-	model = sw_r32(RTL839X_MODEL_NAME_INFO);
-	priv->version = RTL8390_VERSION_A + ((model & 0x3f) >> 1);
-
-	pr_debug("RTL839X Chip-Info: %x, version %c\n", info, priv->version);
-}
-
 void rtl839x_vlan_profile_dump(int profile)
 {
 	u32 p[2];
@@ -672,16 +640,20 @@ void rtl839x_vlan_profile_dump(int profile)
 	pr_debug("VLAN profile %d: raw %08x, %08x\n", profile, p[0], p[1]);
 }
 
-static void rtl839x_stp_get(struct rtl838x_switch_priv *priv, u16 msti, u32 port_state[])
+static int rtldsa_839x_stp_get(struct rtl838x_switch_priv *priv, u16 msti, int port, u32 port_state[])
 {
+	int idx = 3 - ((port + 12) / 16);
+	int bit = 2 * ((port + 12) % 16);
 	u32 cmd = 1 << 16 | /* Execute cmd */
 		  0 << 15 | /* Read */
 		  5 << 12 | /* Table type 0b101 */
 		  (msti & 0xfff);
-	priv->r->exec_tbl0_cmd(cmd);
 
+	priv->r->exec_tbl0_cmd(cmd);
 	for (int i = 0; i < 4; i++)
 		port_state[i] = sw_r32(priv->r->tbl_access_data_0(i));
+
+	return (port_state[idx] >> bit) & 3;
 }
 
 static void rtl839x_stp_set(struct rtl838x_switch_priv *priv, u16 msti, u32 port_state[])
@@ -1680,7 +1652,7 @@ const struct rtl838x_reg rtl839x_reg = {
 	.enable_mcast_flood = rtl839x_enable_mcast_flood,
 	.enable_bcast_flood = rtl839x_enable_bcast_flood,
 	.set_static_move_action = rtl839x_set_static_move_action,
-	.stp_get = rtl839x_stp_get,
+	.stp_get = rtldsa_839x_stp_get,
 	.stp_set = rtl839x_stp_set,
 	.mac_force_mode_ctrl = rtl839x_mac_force_mode_ctrl,
 	.mac_port_ctrl = rtl839x_mac_port_ctrl,
@@ -1713,4 +1685,5 @@ const struct rtl838x_reg rtl839x_reg = {
 	.l3_setup = rtl839x_l3_setup,
 	.set_distribution_algorithm = rtl839x_set_distribution_algorithm,
 	.set_receive_management_action = rtl839x_set_receive_management_action,
+	.qos_init = rtldsa_839x_qos_init,
 };

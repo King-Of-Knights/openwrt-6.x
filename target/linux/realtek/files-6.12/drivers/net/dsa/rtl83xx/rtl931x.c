@@ -25,6 +25,11 @@
 #define RTL931X_VLAN_PORT_TAG_ITPID_IDX_MASK			GENMASK(2, 1)
 #define RTL931X_VLAN_PORT_TAG_ITPID_KEEP_MASK			GENMASK(0, 0)
 
+#define RTLDSA_931X_SMI_PHY_ABLTY_GET_SEL			0x0cac
+#define  RTLDSA_931X_PHY_ABLTY_OUTBAND_MDIO			0x0
+#define  RTLDSA_931X_PHY_ABLTY_INBAND_SDS_POLL			0x1
+#define  RTLDSA_931X_PHY_ABLTY_SDS_ABLTY_BUS			0x2
+
 /* Definition of the RTL931X-specific template field IDs as used in the PIE */
 enum template_field_id {
 	TEMPLATE_FIELD_SPM0 = 1,
@@ -151,16 +156,20 @@ static void rtl931x_vlan_profile_dump(int index)
 		 index, (u32)(profile[0] & (3 << 14)), profile[1], profile[2], profile[3]);
 }
 
-static void rtl931x_stp_get(struct rtl838x_switch_priv *priv, u16 msti, u32 port_state[])
+static int rtldsa_931x_stp_get(struct rtl838x_switch_priv *priv, u16 msti, int port, u32 port_state[])
 {
+	int idx = 3 - ((port + 8) / 16);
+	int bit = 2 * ((port + 8) % 16);
 	u32 cmd = 1 << 20 | /* Execute cmd */
 		  0 << 19 | /* Read */
 		  5 << 15 | /* Table type 0b101 */
 		  (msti & 0x3fff);
-	priv->r->exec_tbl0_cmd(cmd);
 
+	priv->r->exec_tbl0_cmd(cmd);
 	for (int i = 0; i < 4; i++)
 		port_state[i] = sw_r32(priv->r->tbl_access_data_0(i));
+
+	return (port_state[idx] >> bit) & 3;
 }
 
 static void rtl931x_stp_set(struct rtl838x_switch_priv *priv, u16 msti, u32 port_state[])
@@ -1764,6 +1773,30 @@ static void rtldsa_931x_qos_init(struct rtl838x_switch_priv *priv)
 	rtldsa_931x_qos_set_scheduling_queue_weights(priv);
 }
 
+void rtldsa_931x_config_phy_ability_source(struct rtl838x_switch_priv *priv)
+{
+	u32 phy_ablty_sel[4] = {0};
+
+	for (int port = 0; port < priv->cpu_port; port++) {
+		u32 val = RTLDSA_931X_PHY_ABLTY_OUTBAND_MDIO;
+
+		/* port driven by SerDes */
+		if (!priv->ports[port].phy && priv->pcs[port])
+			val = RTLDSA_931X_PHY_ABLTY_SDS_ABLTY_BUS;
+
+		phy_ablty_sel[port / 16] |= (val & 0x3) << ((port % 16) * 2);
+	}
+
+	pr_debug("%s: phy_ablty_sel [0] %x [1] %x [2] %x [3] %x\n", __func__,
+		 phy_ablty_sel[0], phy_ablty_sel[1], phy_ablty_sel[2],
+		 phy_ablty_sel[3]);
+
+	sw_w32(phy_ablty_sel[0], RTLDSA_931X_SMI_PHY_ABLTY_GET_SEL);
+	sw_w32(phy_ablty_sel[1], RTLDSA_931X_SMI_PHY_ABLTY_GET_SEL + 0x4);
+	sw_w32(phy_ablty_sel[2], RTLDSA_931X_SMI_PHY_ABLTY_GET_SEL + 0x8);
+	sw_w32(phy_ablty_sel[3], RTLDSA_931X_SMI_PHY_ABLTY_GET_SEL + 0xc);
+}
+
 const struct rtl838x_reg rtl931x_reg = {
 	.mask_port_reg_be = rtl839x_mask_port_reg_be,
 	.set_port_reg_be = rtl839x_set_port_reg_be,
@@ -1800,7 +1833,7 @@ const struct rtl838x_reg rtl931x_reg = {
 	.vlan_profile_dump = rtl931x_vlan_profile_dump,
 	.vlan_profile_setup = rtl931x_vlan_profile_setup,
 	.vlan_fwd_on_inner = rtl931x_vlan_fwd_on_inner,
-	.stp_get = rtl931x_stp_get,
+	.stp_get = rtldsa_931x_stp_get,
 	.stp_set = rtl931x_stp_set,
 	.mac_force_mode_ctrl = rtl931x_mac_force_mode_ctrl,
 	.mac_port_ctrl = rtl931x_mac_port_ctrl,

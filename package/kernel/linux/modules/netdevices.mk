@@ -238,7 +238,7 @@ $(eval $(call KernelPackage,mdio-gpio))
 define KernelPackage/et131x
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Agere ET131x Gigabit Ethernet driver
-  URL:=http://sourceforge.net/projects/et131x
+  URL:=https://sourceforge.net/projects/et131x
   FILES:= \
 	$(LINUX_DIR)/drivers/net/ethernet/agere/et131x.ko
   KCONFIG:= \
@@ -620,6 +620,23 @@ define KernelPackage/phy-aquantia/description
 endef
 
 $(eval $(call KernelPackage,phy-aquantia))
+
+
+define KernelPackage/phy-motorcomm
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Motorcomm Ethernet PHYs
+  DEPENDS:=+kmod-libphy
+  KCONFIG:=CONFIG_MOTORCOMM_PHY
+  FILES:=$(LINUX_DIR)/drivers/net/phy/motorcomm.ko
+  AUTOLOAD:=$(call AutoLoad,18,motorcomm,1)
+endef
+
+define KernelPackage/phy-motorcomm/description
+  Supports the Motorcomm 8511/8521/8531/8531S/8821 Ethernet PHYs
+endef
+
+$(eval $(call KernelPackage,phy-motorcomm))
+
 
 define KernelPackage/dsa
   SUBMENU:=$(NETWORK_DEVICES_MENU)
@@ -1207,6 +1224,7 @@ define KernelPackage/r8169
     CONFIG_R8169_LEDS=y
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/realtek/r8169.ko
   AUTOLOAD:=$(call AutoProbe,r8169,1)
+  DEFAULT_VARIANT:=1
 endef
 
 define KernelPackage/r8169/description
@@ -2326,3 +2344,21 @@ define KernelPackage/enc28j60/description
 endef
 
 $(eval $(call KernelPackage,enc28j60))
+
+define KernelPackage/sparx5-switch
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Sparx5 switch driver
+  DEPENDS:=@TARGET_microchipsw +kmod-phylink +kmod-ptp
+  KCONFIG:= \
+  CONFIG_SPARX5_SWITCH \
+  CONFIG_LAN969X_SWITCH=y \
+  CONFIG_SPARX5_DCB=y
+  FILES:=$(LINUX_DIR)/drivers/net/ethernet/microchip/sparx5/sparx5-switch.ko
+  AUTOLOAD:=$(call AutoProbe,sparx5-switch,1)
+endef
+
+define KernelPackage/sparx5-switch/description
+  This driver supports the Sparx5 network switch device.
+endef
+
+$(eval $(call KernelPackage,sparx5-switch))
