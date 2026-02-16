@@ -2,7 +2,7 @@
 
 #include <linux/debugfs.h>
 #include <linux/kernel.h>
-#include <asm/mach-rtl-otto/mach-rtl-otto.h>
+#include <asm/mach-rtl838x/mach-rtl83xx.h>
 
 #include "rtl83xx.h"
 
@@ -180,7 +180,7 @@ static ssize_t stp_state_write(struct file *filp, const char __user *buffer,
 	if (res < 0)
 		return res;
 
-	rtldsa_port_stp_state_set(p->dp->ds, p->dp->index, (u8)value);
+	rtl83xx_port_stp_state_set(p->dp->ds, p->dp->index, (u8)value);
 
 	return res;
 }
@@ -384,7 +384,7 @@ static ssize_t age_out_write(struct file *filp, const char __user *buffer,
 	if (res < 0)
 		return res;
 
-	rtldsa_83xx_fast_age(p->dp->ds, p->dp->index);
+	rtl83xx_fast_age(p->dp->ds, p->dp->index);
 
 	return res;
 }

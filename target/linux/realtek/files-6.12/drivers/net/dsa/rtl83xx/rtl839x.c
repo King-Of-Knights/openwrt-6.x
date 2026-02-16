@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include <asm/mach-rtl-otto/mach-rtl-otto.h>
+#include <asm/mach-rtl838x/mach-rtl83xx.h>
 #include <linux/etherdevice.h>
 
 #include "rtl83xx.h"
@@ -117,7 +117,7 @@ static enum template_field_id fixed_templates[N_FIXED_TEMPLATES][N_FIXED_FIELDS]
 	},
 };
 
-void rtldsa_839x_print_matrix(void)
+void rtl839x_print_matrix(void)
 {
 	volatile u64 *ptr9;
 
@@ -521,17 +521,17 @@ static void rtl839x_write_mcast_pmask(int idx, u64 portmask)
 
 static void rtl839x_vlan_profile_setup(int profile)
 {
-	u32 p[2] = { 0, 0 };
+	u32 p[2];
+	u32 pmask_id = UNKNOWN_MC_PMASK;
 
-	p[1] = RTL839X_VLAN_L2_LEARN_EN(1);
-	p[1] |= RTL839X_VLAN_L2_UNKN_MC_FLD(MC_PMASK_ALL_PORTS_IDX) |
-		RTL839X_VLAN_IP4_UNKN_MC_FLD(MC_PMASK_ALL_PORTS_IDX);
-	p[0] |= RTL839X_VLAN_IP6_UNKN_MC_FLD(MC_PMASK_ALL_PORTS_IDX);
+	p[0] = pmask_id; /* Use portmaks 0xfff for unknown IPv6 MC flooding */
+	/* Enable L2 Learning BIT 0, portmask UNKNOWN_MC_PMASK for IP/L2-MC traffic flooding */
+	p[1] = 1 | pmask_id << 1 | pmask_id << 13;
 
 	sw_w32(p[0], RTL839X_VLAN_PROFILE(profile));
 	sw_w32(p[1], RTL839X_VLAN_PROFILE(profile) + 4);
 
-	rtl839x_write_mcast_pmask(MC_PMASK_ALL_PORTS_IDX, RTL839X_MC_PMASK_ALL_PORTS);
+	rtl839x_write_mcast_pmask(UNKNOWN_MC_PMASK, 0x001fffffffffffff);
 }
 
 static void rtl839x_traffic_set(int source, u64 dest_matrix)
@@ -555,9 +555,7 @@ static void rtl839x_l2_learning_setup(void)
 	 * address flooding to the reserved entry in the portmask table used
 	 * also for multicast flooding
 	 */
-	sw_w32(RTL839X_L2_BC_FLD(MC_PMASK_ALL_PORTS_IDX) |
-	       RTL839X_L2_UNKN_UC_FLD(MC_PMASK_ALL_PORTS_IDX),
-	       RTL839X_L2_FLD_PMSK);
+	sw_w32(UNKNOWN_MC_PMASK << 12 | UNKNOWN_MC_PMASK, RTL839X_L2_FLD_PMSK);
 
 	/* Limit learning to maximum: 32k entries, after that just flood (bits 0-1) */
 	sw_w32((0x7fff << 2) | 0, RTL839X_L2_LRN_CONSTRT);
@@ -630,17 +628,15 @@ void rtl839x_vlan_profile_dump(int profile)
 {
 	u32 p[2];
 
-	if (profile < 0 || profile > RTL839X_VLAN_PROFILE_MAX)
+	if (profile < 0 || profile > 7)
 		return;
 
 	p[0] = sw_r32(RTL839X_VLAN_PROFILE(profile));
 	p[1] = sw_r32(RTL839X_VLAN_PROFILE(profile) + 4);
 
 	pr_debug("VLAN profile %d: L2 learning: %d, UNKN L2MC FLD PMSK %d, UNKN IPMC FLD PMSK %d, UNKN IPv6MC FLD PMSK: %d\n",
-		 profile, RTL839X_VLAN_L2_LEARN_EN_R(p),
-		 RTL839X_VLAN_L2_UNKN_MC_FLD_PMSK(p),
-		 RTL839X_VLAN_IP4_UNKN_MC_FLD_PMSK(p),
-		 RTL839X_VLAN_IP6_UNKN_MC_FLD_PMSK(p));
+		 profile, p[1] & 1, (p[1] >> 1) & 0xfff, (p[1] >> 13) & 0xfff,
+		 (p[0]) & 0xfff);
 	pr_debug("VLAN profile %d: raw %08x, %08x\n", profile, p[0], p[1]);
 }
 
@@ -1609,7 +1605,7 @@ static void rtl839x_set_receive_management_action(int port, rma_ctrl_t type, act
 	}
 }
 
-const struct rtldsa_config rtldsa_839x_cfg = {
+const struct rtl838x_reg rtl839x_reg = {
 	.mask_port_reg_be = rtl839x_mask_port_reg_be,
 	.set_port_reg_be = rtl839x_set_port_reg_be,
 	.get_port_reg_be = rtl839x_get_port_reg_be,
@@ -1640,7 +1636,6 @@ const struct rtldsa_config rtldsa_839x_cfg = {
 	.isr_port_link_sts_chg = RTL839X_ISR_PORT_LINK_STS_CHG,
 	.imr_port_link_sts_chg = RTL839X_IMR_PORT_LINK_STS_CHG,
 	.imr_glb = RTL839X_IMR_GLB,
-	.port_ignore = 0x3f,
 	.vlan_tables_read = rtl839x_vlan_tables_read,
 	.vlan_set_tagged = rtl839x_vlan_set_tagged,
 	.vlan_set_untagged = rtl839x_vlan_set_untagged,
@@ -1664,7 +1659,6 @@ const struct rtldsa_config rtldsa_839x_cfg = {
 	.l2_port_new_salrn = rtl839x_l2_port_new_salrn,
 	.l2_port_new_sa_fwd = rtl839x_l2_port_new_sa_fwd,
 	.get_mirror_config = rtldsa_839x_get_mirror_config,
-	.print_matrix = rtldsa_839x_print_matrix,
 	.read_l2_entry_using_hash = rtl839x_read_l2_entry_using_hash,
 	.write_l2_entry_using_hash = rtl839x_write_l2_entry_using_hash,
 	.read_cam = rtl839x_read_cam,

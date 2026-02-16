@@ -22,9 +22,6 @@ preinit_mount_cfg_part() {
 	tplink,re6000xd)
 		mount_ubi_part "tp_data" "tp_data"
 		;;
-	tplink,eap683-lr)
-		mount_ubi_part "factory" "ubi_factory_data"
-		;;
 	tplink,fr365-v1)
 		mount_ubi_part "wlan" "ubi_wlan_factory_data"
 		;;

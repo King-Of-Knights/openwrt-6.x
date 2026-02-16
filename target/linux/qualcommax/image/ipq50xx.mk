@@ -1,4 +1,3 @@
-DTS_DIR := $(DTS_DIR)/qcom
 DEVICE_VARS += BOOT_SCRIPT
 
 define Build/mstc-header

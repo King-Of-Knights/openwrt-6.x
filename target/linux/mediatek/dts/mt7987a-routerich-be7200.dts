@@ -453,6 +453,7 @@
 	status = "okay";
 
 	vusb33-supply = <&reg_3p3v>;
+	vbus-supply = <&reg_usb_5v>;
 };
 
 &tphyu3port0 {

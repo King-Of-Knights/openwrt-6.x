@@ -231,18 +231,6 @@ define U-Boot/mt7981_abt_asr3000
   DEPENDS:=+trusted-firmware-a-mt7981-spim-nand-ddr3
 endef
 
-define U-Boot/mt7981_bazis-ax3000wm
-  NAME:=BAZIS AX3000WM
-  BUILD_SUBTARGET:=filogic
-  BUILD_DEVICES:=bazis_ax3000wm
-  UBOOT_CONFIG:=mt7981_bazis_ax3000wm
-  UBOOT_IMAGE:=u-boot.fip
-  BL2_BOOTDEV:=spim-nand
-  BL2_SOC:=mt7981
-  BL2_DDRTYPE:=ddr3
-  DEPENDS:=+trusted-firmware-a-mt7981-spim-nand-ddr3
-endef
-
 define U-Boot/mt7981_cmcc_a10
   NAME:=CMCC A10
   BUILD_SUBTARGET:=filogic
@@ -438,18 +426,6 @@ define U-Boot/mt7981_netis_nx31
   BUILD_SUBTARGET:=filogic
   BUILD_DEVICES:=netis_nx31
   UBOOT_CONFIG:=mt7981_netis_nx31
-  UBOOT_IMAGE:=u-boot.fip
-  BL2_BOOTDEV:=spim-nand
-  BL2_SOC:=mt7981
-  BL2_DDRTYPE:=ddr3
-  DEPENDS:=+trusted-firmware-a-mt7981-spim-nand-ddr3
-endef
-
-define U-Boot/mt7981_netis_nx32u
-  NAME:=netis NX32U
-  BUILD_SUBTARGET:=filogic
-  BUILD_DEVICES:=netis_nx32u
-  UBOOT_CONFIG:=mt7981_netis_nx32u
   UBOOT_IMAGE:=u-boot.fip
   BL2_BOOTDEV:=spim-nand
   BL2_SOC:=mt7981
@@ -1130,7 +1106,6 @@ UBOOT_TARGETS := \
 	mt7628_ravpower_rp-wd009 \
 	mt7629_rfb \
 	mt7981_abt_asr3000 \
-	mt7981_bazis-ax3000wm \
 	mt7981_cmcc_a10 \
 	mt7981_cmcc_rax3000m-emmc-ddr3 \
 	mt7981_cmcc_rax3000m-emmc-ddr4 \
@@ -1149,7 +1124,6 @@ UBOOT_TARGETS := \
 	mt7981_konka_komi-a31 \
 	mt7981_netis_nx30v2 \
 	mt7981_netis_nx31 \
-	mt7981_netis_nx32u \
 	mt7981_nokia_ea0326gmp \
 	mt7981_openwrt_one-snand \
 	mt7981_openwrt_one-nor \

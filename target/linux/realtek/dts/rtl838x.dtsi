@@ -355,7 +355,7 @@
 	};
 
 	switch0: switch@1b000000 {
-		compatible = "realtek,rtl8380-switch", "realtek,otto-switch";
+		compatible = "realtek,rtl83xx-switch";
 
 		interrupt-parent = <&intc>;
 		interrupts = <20 2>;

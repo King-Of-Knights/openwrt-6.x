@@ -50,7 +50,6 @@
 					partition@0 {
 						reg = <0x00000000 0x00001000>;
 						label = "u-boot-env-1";
-						status = "disabled";
 
 						nvmem-layout {
 							compatible = "u-boot,env-redundant-bool";
@@ -60,15 +59,18 @@
 						};
 					};
 
-					partition@1000 {
-						reg = <0x00001000 0x00001000>;
-						label = "u-boot-env-2";
-						status = "disabled";
-
-						nvmem-layout {
-							compatible = "u-boot,env-redundant-bool";
-						};
-					};
+/*
+ * Causes the following warning: * sysfs: cannot create duplicate filename '/bus/nvmem/devices/u-boot-env0'
+ *
+ *					partition@1000 {
+ *						reg = <0x00001000 0x00001000>;
+ *						label = "u-boot-env-2";
+ *
+ *						nvmem-layout {
+ *							compatible = "u-boot,env-redundant-bool";
+ *						};
+ *					};
+ */
 				};
 
 

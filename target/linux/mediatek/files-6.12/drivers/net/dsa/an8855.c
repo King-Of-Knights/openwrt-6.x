@@ -12,6 +12,7 @@
 #include <linux/iopoll.h>
 #include <linux/netdevice.h>
 #include <linux/of_net.h>
+#include <linux/of_platform.h>
 #include <linux/phylink.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>

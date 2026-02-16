@@ -7,9 +7,7 @@ endef
 
 # tclinux-trx is the default format used in the SDK
 define Build/tclinux-trx
-  ./tclinux-trx.sh --kernel $@ --rootfs $(IMAGE_ROOTFS) \
-    --version $(VERSION_DIST)-$(REVISION) --endian $(TRX_ENDIAN) \
-    $(if $(TRX_MODEL),--model $(TRX_MODEL)) > $@.new
+  ./tclinux-trx.sh $@ $(IMAGE_ROOTFS) $(VERSION_DIST)-$(REVISION) > $@.new
 	mv $@.new $@
 endef
 

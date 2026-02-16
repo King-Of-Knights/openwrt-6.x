@@ -1,4 +1,3 @@
-ARCH:=mips
 BOARDNAME:=en751221
 CPU_TYPE:=24kc
 KERNELNAME:=vmlinuz.bin

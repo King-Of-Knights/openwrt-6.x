@@ -1,5 +1,3 @@
-TRX_ENDIAN := be
-
 define Device/en751221_generic
   DEVICE_VENDOR := EN751221 Family
   DEVICE_MODEL := Initramfs Image
