@@ -231,17 +231,17 @@ endef
 # 3: ABI version
 # 4: list of provides
 define FormatProvides
-$(strip
-  $(if $(call FormatABISuffix,$(1),$(3)),
-    $(1) $(foreach provide,
-      $(filter-out $(1),$(4)),
-      $(call AddProvide,$(provide),$(2),$(3))
-    ),
-    $(foreach provide,
-      $(filter-out $(1),$(4)),
-      $(call AddProvide,$(provide),$(2))
-    )
-  )
+$(strip \
+  $(if $(call FormatABISuffix,$(1),$(3)), \
+    $(1) $(foreach provide, \
+      $(filter-out $(1),$(4)), \
+      $(call AddProvide,$(provide),$(2),$(3)) \
+    ), \
+    $(foreach provide, \
+      $(filter-out $(1),$(4)), \
+      $(call AddProvide,$(provide),$(2)) \
+    ) \
+  ) \
 )
 endef
 
@@ -450,7 +450,7 @@ endif
 	$(call Package/$(1)/install,$$(IDIR_$(1)))
 	$(if $(Package/$(1)/install-overlay),mkdir -p $(PACKAGE_DIR) $$(IDIR_$(1))/rootfs-overlay)
 	$(call Package/$(1)/install-overlay,$$(IDIR_$(1))/rootfs-overlay)
-	-find $$(IDIR_$(1)) -name 'CVS' -o -name '.svn' -o -name '.#*' -o -name '*~'| $(XARGS) rm -rf
+	-find $$(IDIR_$(1)) -name '.svn' -o -name '.#*' -o -name '*~'| $(XARGS) rm -rf
 	@( \
 		find $$(IDIR_$(1)) -name lib\*.so\* -or -name \*.ko | awk -F/ '{ print $$$$NF }'; \
 		for file in $$(patsubst %,$(PKG_INFO_DIR)/%.provides,$$(IDEPEND_$(1))); do \
