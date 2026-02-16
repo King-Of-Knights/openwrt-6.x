@@ -948,6 +948,19 @@ define Device/dlink_dir_nand_128m
 	check-size
 endef
 
+define Device/dlink_dir-1360-a1
+  $(Device/dlink_dir_nand_128m)
+  DEVICE_VENDOR := D-Link
+  DEVICE_MODEL := DIR-1360
+  DEVICE_VARIANT := A1
+  DEVICE_PACKAGES := kmod-mt7615-firmware kmod-usb3 kmod-usb-ledtrig-usbport
+  IMAGE_SIZE := 40960k
+  IMAGES := factory.bin sysupgrade.bin
+  IMAGE/factory.bin := $$(IMAGE/recovery.bin)
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+endef
+TARGET_DEVICES += dlink_dir-1360-a1
+
 define Device/dlink_dir-1935-a1
   $(Device/dlink_dir-8xx-a1)
   DEVICE_MODEL := DIR-1935
@@ -2240,7 +2253,7 @@ TARGET_DEVICES += mikrotik_routerboard-m11g
 define Device/mikrotik_routerboard-m33g
   $(Device/MikroTik)
   DEVICE_MODEL := RouterBOARD M33G
-  DEVICE_PACKAGES := -wpad-basic-mbedtls
+  DEVICE_PACKAGES := kmod-usb3 -wpad-basic-mbedtls
   SUPPORTED_DEVICES += mikrotik,rbm33g
 endef
 TARGET_DEVICES += mikrotik_routerboard-m33g
