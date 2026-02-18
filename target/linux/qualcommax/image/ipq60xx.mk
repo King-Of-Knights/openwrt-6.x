@@ -132,7 +132,7 @@ define Device/linksys_mr
 	KERNEL_SIZE := 8192k
 	IMAGES += factory.bin
 	IMAGE/factory.bin := append-kernel | pad-to $$$$(KERNEL_SIZE) | append-ubi | linksys-image type=$$$$(DEVICE_MODEL)
-	DEVICE_PACKAGE := kmod-usb-ledtrig-usbport
+	DEVICE_PACKAGES := kmod-usb-ledtrig-usbport
 endef
 
 define Device/linksys_mr7350
@@ -208,14 +208,14 @@ define Device/netgear_wax610-common
 endef
 
 define Device/netgear_wax610
-	$(Device/netgear_wax610-common)
+	$(call Device/netgear_wax610-common)
 	DEVICE_MODEL := WAX610
 	DEVICE_PACKAGES := ipq-wifi-netgear_wax610
 endef
 TARGET_DEVICES += netgear_wax610
 
 define Device/netgear_wax610y
-	$(Device/netgear_wax610-common)
+	$(call Device/netgear_wax610-common)
 	DEVICE_MODEL := WAX610Y
 	DEVICE_PACKAGES := ipq-wifi-netgear_wax610y
 endef

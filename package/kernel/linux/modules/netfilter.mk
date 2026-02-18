@@ -119,6 +119,15 @@ endef
 
 $(eval $(call KernelPackage,nf-conntrack))
 
+define KernelPackage/nf-conntrack6
+  SUBMENU:=$(NF_MENU)
+  TITLE:=Netfilter IPv6 connection tracking (compat)
+  DEPENDS:=@IPV6 +kmod-nf-conntrack
+  HIDDEN:=1
+endef
+
+$(eval $(call KernelPackage,nf-conntrack6))
+
 
 define KernelPackage/nf-dup-inet
   SUBMENU:=$(NF_MENU)
