@@ -1,0 +1,206 @@
+name: Unified Upstream Sync
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 配置 Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: 拉取上游仓库
+        run: |
+          if ! git remote get-url upstream >/dev/null 2>&1; then
+            git remote add upstream https://github.com/openwrt/openwrt.git
+          fi
+          if ! git remote get-url nss-upstream >/dev/null 2>&1; then
+            git remote add nss-upstream https://github.com/qosmio/openwrt-ipq.git
+          fi
+          git fetch upstream main
+          git fetch nss-upstream main-nss
+
+      - name: 检查内核/mac80211 变化
+        id: change_check
+        run: |
+          KERNEL_DIFF=$(git diff --name-only HEAD..upstream/main -- include/kernel-version.mk | wc -l)
+          MAC80211_DIFF=$(git diff --name-only HEAD..upstream/main -- package/kernel/mac80211 | wc -l)
+
+          if [ "$KERNEL_DIFF" -gt 0 ] || [ "$MAC80211_DIFF" -gt 0 ]; then
+            echo "needs_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_build=false" >> $GITHUB_OUTPUT
+          fi
+
+          CURRENT_KERNEL=$(git show HEAD:include/kernel-version.mk | grep -E "^LINUX_VERSION-" | head -1 || true)
+          UPSTREAM_KERNEL=$(git show upstream/main:include/kernel-version.mk | grep -E "^LINUX_VERSION-" | head -1 || true)
+
+          echo "current_kernel=$CURRENT_KERNEL" >> $GITHUB_OUTPUT
+          echo "upstream_kernel=$UPSTREAM_KERNEL" >> $GITHUB_OUTPUT
+
+      - name: 同步 ath11k 固件（仅 VIKINGYFY）
+        id: ath11k
+        run: |
+          UPSTREAM_REPO="https://github.com/VIKINGYFY/ath11k-firmware-ddwrt.git"
+          LATEST_COMMIT=$(git ls-remote "$UPSTREAM_REPO" HEAD | cut -f1)
+
+          CURRENT_VERSION=$(grep "PKG_SOURCE_VERSION:=" package/firmware/ath11k-firmware/Makefile | cut -d'=' -f2)
+          if [ "$LATEST_COMMIT" = "$CURRENT_VERSION" ]; then
+            echo "ath11k_updated=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          TEMP_DIR=$(mktemp -d)
+          git clone --bare "$UPSTREAM_REPO" "$TEMP_DIR/repo.git"
+          cd "$TEMP_DIR/repo.git"
+          git archive --format=tar --prefix=ath11k-firmware/ "$LATEST_COMMIT" | gzip > ../archive.tar.gz
+          HASH=$(sha256sum ../archive.tar.gz | cut -d' ' -f1)
+          cd "$GITHUB_WORKSPACE"
+
+          NEW_DATE=$(date +%Y-%m-%d)
+          sed -i "s/PKG_SOURCE_DATE:=.*/PKG_SOURCE_DATE:=$NEW_DATE/" package/firmware/ath11k-firmware/Makefile
+          sed -i "s/PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=$LATEST_COMMIT/" package/firmware/ath11k-firmware/Makefile
+          sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=$HASH/" package/firmware/ath11k-firmware/Makefile
+
+          git add package/firmware/ath11k-firmware/Makefile
+          git commit -m "ath11k-firmware: sync from VIKINGYFY ($LATEST_COMMIT)"
+          git push origin main
+
+          echo "ath11k_updated=true" >> $GITHUB_OUTPUT
+
+      - name: 合并上游并按规则处理
+        id: sync
+        run: |
+          set -e
+          BASE_SHA=$(git rev-parse HEAD)
+          NEEDS_BUILD="${{ steps.change_check.outputs.needs_build }}"
+
+          MERGE_OK=true
+          NEED_ISSUE=false
+          ISSUE_TITLE=""
+          ISSUE_BODY=""
+
+          if ! git merge --no-commit --no-ff upstream/main; then
+            CONFLICT_FILES=$(git diff --name-only --diff-filter=U)
+            if echo "$CONFLICT_FILES" | grep -q "^files/target/linux/qualcommax/"; then
+              NEED_ISSUE=true
+              ISSUE_TITLE="上游同步冲突: files/target/linux/qualcommax 需要人工处理"
+              ISSUE_BODY="以下文件冲突无法自动解决:\n\n"
+              for file in $CONFLICT_FILES; do
+                ISSUE_BODY="${ISSUE_BODY}- \`$file\`\n"
+              done
+              git merge --abort
+              MERGE_OK=false
+            else
+              if echo "$CONFLICT_FILES" | grep -q "package/firmware/ath11k-firmware/Makefile"; then
+                git checkout --ours package/firmware/ath11k-firmware/Makefile
+                git add package/firmware/ath11k-firmware/Makefile
+              fi
+
+              for file in $CONFLICT_FILES; do
+                if [ "$file" != "package/firmware/ath11k-firmware/Makefile" ]; then
+                  git checkout --theirs "$file"
+                  git add "$file"
+                fi
+              done
+
+              if git diff --name-only --diff-filter=U | grep -q "."; then
+                NEED_ISSUE=true
+                ISSUE_TITLE="上游同步冲突: 无法自动解决"
+                ISSUE_BODY="仍存在未解决冲突:\n\n"
+                for file in $(git diff --name-only --diff-filter=U); do
+                  ISSUE_BODY="${ISSUE_BODY}- \`$file\`\n"
+                done
+                git merge --abort
+                MERGE_OK=false
+              fi
+            fi
+          fi
+
+          if [ "$MERGE_OK" != "true" ]; then
+            echo "need_issue=$NEED_ISSUE" >> $GITHUB_OUTPUT
+            echo "issue_title=$ISSUE_TITLE" >> $GITHUB_OUTPUT
+            echo "issue_body<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$ISSUE_BODY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [ "$NEEDS_BUILD" = "true" ]; then
+            sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+            sudo apt-get update
+            sudo apt-get install -y \
+              build-essential clang flex bison g++ gawk \
+              gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+              python3-distutils rsync unzip zlib1g-dev file wget \
+              libelf-dev libglib2.0-dev libgmp3-dev libmpc-dev \
+              libmpfr-dev libncursesw5-dev libreadline-dev libtool \
+              mkisofs p7zip p7zip-full qemu-utils squashfs-tools \
+              subversion swig texinfo uglifyjs upx-ucl xmlto \
+              ccache libfuse-dev
+
+            ./scripts/feeds update -a
+            ./scripts/feeds install -a
+
+            cat > .config << 'EOF'
+            CONFIG_TARGET_qualcommax=y
+            CONFIG_TARGET_qualcommax_ipq60xx=y
+            CONFIG_TARGET_qualcommax_ipq60xx_DEVICE_glinet_gl-axt1800=y
+            CONFIG_LINUX_6_12=y
+            CONFIG_PACKAGE_kmod-mac80211=y
+            CONFIG_PACKAGE_kmod-ath11k=y
+            CONFIG_PACKAGE_ath11k-firmware-ipq6018=y
+            CONFIG_PACKAGE_nss-firmware-ipq60xx=y
+            CONFIG_PACKAGE_kmod-qca-nss-dp=y
+            CONFIG_PACKAGE_kmod-qca-nss-drv=y
+            CONFIG_PACKAGE_kmod-qca-nss-drv-bridge-mgr=y
+            CONFIG_PACKAGE_kmod-qca-nss-ecm=y
+            EOF
+
+            make defconfig
+            make tools/install -j$(nproc) V=s
+            make toolchain/install -j$(nproc) V=s
+            make target/linux/compile -j$(nproc) V=s
+            make package/kernel/mac80211/compile -j$(nproc) V=s
+
+            for pkg in \
+              package/feeds/nss_packages/qca-nss-drv/compile \
+              package/feeds/nss_packages/qca-nss-ecm/compile \
+              package/feeds/nss_packages/qca-nss-dp/compile \
+              package/feeds/nss_packages/qca-nss-drv-bridge-mgr/compile \
+              package/feeds/nss_packages/nss-firmware-ipq60xx/compile; do
+              make "$pkg" -j$(nproc) V=s
+            done
+          fi
+
+          git commit -m "Merge upstream openwrt/main"
+          git push origin main
+          echo "pushed=true" >> $GITHUB_OUTPUT
+
+      - name: 创建 Issue（需要人工处理时）
+        if: steps.sync.outputs.need_issue == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `${{ steps.sync.outputs.issue_title }}`,
+              body: `${{ steps.sync.outputs.issue_body }}`,
+            });
