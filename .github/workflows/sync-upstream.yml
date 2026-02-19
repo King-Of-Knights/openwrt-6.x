@@ -67,13 +67,12 @@ jobs:
           fi
 
           TEMP_DIR=$(mktemp -d)
-          git clone --bare "$UPSTREAM_REPO" "$TEMP_DIR/repo.git"
-          cd "$TEMP_DIR/repo.git"
-          git archive --format=tar --prefix=ath11k-firmware/ "$LATEST_COMMIT" | gzip > ../archive.tar.gz
-          HASH=$(sha256sum ../archive.tar.gz | cut -d' ' -f1)
-          cd "$GITHUB_WORKSPACE"
-
-          NEW_DATE=$(git show -s --format=%cs "$LATEST_COMMIT")
+          git init "$TEMP_DIR/repo"
+          git -C "$TEMP_DIR/repo" remote add origin "$UPSTREAM_REPO"
+          git -C "$TEMP_DIR/repo" fetch --depth=1 origin "$LATEST_COMMIT"
+          git -C "$TEMP_DIR/repo" archive --format=tar --prefix=ath11k-firmware/ "$LATEST_COMMIT" | gzip > "$TEMP_DIR/archive.tar.gz"
+          HASH=$(sha256sum "$TEMP_DIR/archive.tar.gz" | cut -d' ' -f1)
+          NEW_DATE=$(git -C "$TEMP_DIR/repo" show -s --format=%cs "$LATEST_COMMIT")
           sed -i "s/PKG_SOURCE_DATE:=.*/PKG_SOURCE_DATE:=$NEW_DATE/" package/firmware/ath11k-firmware/Makefile
           sed -i "s/PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=$LATEST_COMMIT/" package/firmware/ath11k-firmware/Makefile
           sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=$HASH/" package/firmware/ath11k-firmware/Makefile
