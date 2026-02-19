@@ -73,7 +73,7 @@ jobs:
           HASH=$(sha256sum ../archive.tar.gz | cut -d' ' -f1)
           cd "$GITHUB_WORKSPACE"
 
-          NEW_DATE=$(date +%Y-%m-%d)
+          NEW_DATE=$(git show -s --format=%cs "$LATEST_COMMIT")
           sed -i "s/PKG_SOURCE_DATE:=.*/PKG_SOURCE_DATE:=$NEW_DATE/" package/firmware/ath11k-firmware/Makefile
           sed -i "s/PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=$LATEST_COMMIT/" package/firmware/ath11k-firmware/Makefile
           sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=$HASH/" package/firmware/ath11k-firmware/Makefile
