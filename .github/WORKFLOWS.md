@@ -16,7 +16,7 @@
   - ath11k-firmware/Makefile 冲突: 始终保持本地版本（该文件从 VIKINGYFY/ath11k-firmware-ddwrt.git 单独跟踪）
   - GL-AXT1800 设备相关冲突: 创建 Issue 通知维护者，不自动解决
   - 其他设备添加或通用更新: 接受上游更改，但验证不会破坏 GL-AXT1800 支持
-- 内核主版本变化检测: 当内核主版本号变化时（如 6.12→6.18），创建 Issue 通知
+- 内核主版本变化检测: 当内核主版本号变化时（如 6.1→6.6），创建 Issue 通知
 - GL-AXT1800 设备支持验证: 合并后自动验证关键文件未被删除
 
 **Issue 标签**: `upstream-sync`, `kernel-update`

@@ -111,7 +111,7 @@ jobs:
             AXT1800_CONFLICTS=""
             for file in $QUALCOMMAX_CONFLICTS; do
               # 检查冲突标记中是否包含 GL-AXT1800 相关内容
-              if git diff -U3 "$file" | grep -E "^[<=>]{7}" -A 5 -B 5 | grep -iE "(axt1800|gl-axt1800|glinet_gl-axt1800)"; then
+              if git diff -U3 "$file" | grep -E "^(<{7}|={7}|>{7})" -A 5 -B 5 | grep -iE "(axt1800|gl-axt1800|glinet_gl-axt1800)"; then
                 AXT1800_CONFLICTS="$AXT1800_CONFLICTS $file"
               fi
             done

@@ -175,14 +175,21 @@ jobs:
           
           # 编译 NSS 固件
           if ! make package/firmware/ath11k-firmware/compile -j$(nproc) V=s; then
-            echo "⚠️ ath11k-firmware 编译失败"
+            echo "❌ ath11k-firmware 编译失败"
             NSS_BUILD_SUCCESS=false
           fi
           
-          # 尝试编译 NSS 包（来自 feeds）
-          if ! make package/feeds/nss_packages/qca-nss-drv/compile -j1 V=s 2>/dev/null; then
-            echo "ℹ️ NSS drv 编译跳过（可能不存在或依赖未满足）"
-            # NSS 包可能不存在，不算作失败
+          # 尝试编译 NSS 包（来自 feeds），这是可选的
+          if make package/feeds/nss_packages/qca-nss-drv/compile -j1 V=s 2>&1 | tee /tmp/nss-drv-build.log; then
+            echo "✅ NSS drv 编译成功"
+          else
+            # NSS 包可能不存在或依赖未满足，检查是否是真正的错误
+            if grep -q "No rule to make target" /tmp/nss-drv-build.log || grep -q "No such file" /tmp/nss-drv-build.log; then
+              echo "ℹ️ NSS drv 包不存在或未配置（这是正常的）"
+            else
+              echo "⚠️ NSS drv 编译可能有问题，但不视为关键错误"
+              cat /tmp/nss-drv-build.log
+            fi
           fi
           
           if [ "$NSS_BUILD_SUCCESS" = true ]; then

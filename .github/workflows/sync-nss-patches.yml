@@ -131,8 +131,7 @@ jobs:
           git checkout "$LATEST_COMMIT"
           
           # 返回工作目录
-          WORK_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
-          cd "$WORK_DIR"
+          cd "$GITHUB_WORKSPACE"
           
           # 复制 mac80211 补丁（如果有更改）
           if [ "${{ steps.analyze.outputs.has_mac80211_changes }}" = "true" ]; then
