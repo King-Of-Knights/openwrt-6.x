@@ -102,13 +102,12 @@ jobs:
         id: download
         continue-on-error: true
         run: |
-          make download -j$(nproc) V=s
-          
-          # 检查下载结果
-          if [ $? -eq 0 ]; then
+          if make download -j$(nproc) V=s; then
             echo "download_success=true" >> $GITHUB_OUTPUT
+            exit 0
           else
             echo "download_success=false" >> $GITHUB_OUTPUT
+            exit 1
           fi
       
       - name: 清理旧的内核构建产物
@@ -124,15 +123,14 @@ jobs:
         continue-on-error: true
         run: |
           echo "开始编译工具链..."
-          make tools/install -j$(nproc) V=s
-          make toolchain/install -j$(nproc) V=s
-          
-          if [ $? -eq 0 ]; then
+          if make tools/install -j$(nproc) V=s && make toolchain/install -j$(nproc) V=s; then
             echo "toolchain_success=true" >> $GITHUB_OUTPUT
             echo "✅ 工具链编译成功"
+            exit 0
           else
             echo "toolchain_success=false" >> $GITHUB_OUTPUT
             echo "❌ 工具链编译失败"
+            exit 1
           fi
       
       - name: 编译内核
@@ -141,14 +139,14 @@ jobs:
         continue-on-error: true
         run: |
           echo "开始编译内核..."
-          make target/linux/compile -j$(nproc) V=s
-          
-          if [ $? -eq 0 ]; then
+          if make target/linux/compile -j$(nproc) V=s; then
             echo "kernel_success=true" >> $GITHUB_OUTPUT
             echo "✅ 内核编译成功"
+            exit 0
           else
             echo "kernel_success=false" >> $GITHUB_OUTPUT
             echo "❌ 内核编译失败"
+            exit 1
           fi
       
       - name: 编译 mac80211
@@ -157,14 +155,14 @@ jobs:
         continue-on-error: true
         run: |
           echo "开始编译 mac80211..."
-          make package/kernel/mac80211/compile -j$(nproc) V=s
-          
-          if [ $? -eq 0 ]; then
+          if make package/kernel/mac80211/compile -j$(nproc) V=s; then
             echo "mac80211_success=true" >> $GITHUB_OUTPUT
             echo "✅ mac80211 编译成功"
+            exit 0
           else
             echo "mac80211_success=false" >> $GITHUB_OUTPUT
             echo "❌ mac80211 编译失败"
+            exit 1
           fi
       
       - name: 编译 NSS 包
@@ -173,16 +171,29 @@ jobs:
         continue-on-error: true
         run: |
           echo "开始编译 NSS 相关包..."
+          NSS_BUILD_SUCCESS=true
           
           # 编译 NSS 固件
-          make package/firmware/ath11k-firmware/compile -j$(nproc) V=s || echo "ath11k-firmware 编译警告"
+          if ! make package/firmware/ath11k-firmware/compile -j$(nproc) V=s; then
+            echo "⚠️ ath11k-firmware 编译失败"
+            NSS_BUILD_SUCCESS=false
+          fi
           
           # 尝试编译 NSS 包（来自 feeds）
-          make package/feeds/nss_packages/qca-nss-drv/compile -j1 V=s || echo "NSS drv 编译跳过（可能不存在）"
+          if ! make package/feeds/nss_packages/qca-nss-drv/compile -j1 V=s 2>/dev/null; then
+            echo "ℹ️ NSS drv 编译跳过（可能不存在或依赖未满足）"
+            # NSS 包可能不存在，不算作失败
+          fi
           
-          # 简单检查：如果没有严重错误就认为成功
-          echo "nss_success=true" >> $GITHUB_OUTPUT
-          echo "✅ NSS 包编译完成"
+          if [ "$NSS_BUILD_SUCCESS" = true ]; then
+            echo "nss_success=true" >> $GITHUB_OUTPUT
+            echo "✅ NSS 包编译完成"
+            exit 0
+          else
+            echo "nss_success=false" >> $GITHUB_OUTPUT
+            echo "❌ NSS 包编译失败"
+            exit 1
+          fi
       
       - name: 生成构建摘要
         if: always()

@@ -31,7 +31,10 @@ jobs:
       
       - name: 添加上游远程仓库
         run: |
-          git remote add upstream https://github.com/openwrt/openwrt.git || true
+          # 检查远程仓库是否已存在
+          if ! git remote get-url upstream >/dev/null 2>&1; then
+            git remote add upstream https://github.com/openwrt/openwrt.git
+          fi
           git fetch upstream main
       
       - name: 检测内核版本变化
@@ -107,7 +110,8 @@ jobs:
             # 检查是否涉及 GL-AXT1800 特定内容
             AXT1800_CONFLICTS=""
             for file in $QUALCOMMAX_CONFLICTS; do
-              if git diff "$file" | grep -iE "(axt1800|gl-axt1800|glinet_gl-axt1800)"; then
+              # 检查冲突标记中是否包含 GL-AXT1800 相关内容
+              if git diff -U3 "$file" | grep -E "^[<=>]{7}" -A 5 -B 5 | grep -iE "(axt1800|gl-axt1800|glinet_gl-axt1800)"; then
                 AXT1800_CONFLICTS="$AXT1800_CONFLICTS $file"
               fi
             done

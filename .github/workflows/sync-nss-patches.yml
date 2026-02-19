@@ -32,7 +32,10 @@ jobs:
       
       - name: 添加上游 NSS 仓库
         run: |
-          git remote add nss-upstream https://github.com/qosmio/openwrt-ipq.git || true
+          # 检查远程仓库是否已存在
+          if ! git remote get-url nss-upstream >/dev/null 2>&1; then
+            git remote add nss-upstream https://github.com/qosmio/openwrt-ipq.git
+          fi
           git fetch nss-upstream main-nss
       
       - name: 检查 NSS 补丁更新
@@ -128,7 +131,8 @@ jobs:
           git checkout "$LATEST_COMMIT"
           
           # 返回工作目录
-          cd /home/runner/work/openwrt-6.x/openwrt-6.x
+          WORK_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
+          cd "$WORK_DIR"
           
           # 复制 mac80211 补丁（如果有更改）
           if [ "${{ steps.analyze.outputs.has_mac80211_changes }}" = "true" ]; then
