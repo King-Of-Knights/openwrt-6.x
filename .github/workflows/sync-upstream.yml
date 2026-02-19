@@ -1,0 +1,258 @@
+# 上游同步工作流
+# 定期同步 openwrt/openwrt 主分支并智能解决冲突
+name: Sync Upstream
+
+on:
+  # 每天凌晨4点运行
+  schedule:
+    - cron: '0 4 * * *'
+  # 支持手动触发
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 配置 Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: 添加上游远程仓库
+        run: |
+          git remote add upstream https://github.com/openwrt/openwrt.git || true
+          git fetch upstream main
+      
+      - name: 检测内核版本变化
+        id: kernel_check
+        run: |
+          # 获取当前内核版本
+          CURRENT_KERNEL=$(git --no-pager show HEAD:include/kernel-version.mk | grep -E "^LINUX_VERSION-" | head -1 || echo "")
+          
+          # 获取上游内核版本
+          UPSTREAM_KERNEL=$(git --no-pager show upstream/main:include/kernel-version.mk | grep -E "^LINUX_VERSION-" | head -1 || echo "")
+          
+          echo "current_kernel=$CURRENT_KERNEL" >> $GITHUB_OUTPUT
+          echo "upstream_kernel=$UPSTREAM_KERNEL" >> $GITHUB_OUTPUT
+          
+          # 提取主版本号和次版本号
+          if [ -n "$CURRENT_KERNEL" ] && [ -n "$UPSTREAM_KERNEL" ]; then
+            CURRENT_VER=$(echo "$CURRENT_KERNEL" | sed 's/LINUX_VERSION-//' | cut -d'=' -f2 | tr -d ' ' | cut -d'.' -f1-2)
+            UPSTREAM_VER=$(echo "$UPSTREAM_KERNEL" | sed 's/LINUX_VERSION-//' | cut -d'=' -f2 | tr -d ' ' | cut -d'.' -f1-2)
+            
+            echo "current_ver=$CURRENT_VER" >> $GITHUB_OUTPUT
+            echo "upstream_ver=$UPSTREAM_VER" >> $GITHUB_OUTPUT
+            
+            if [ "$CURRENT_VER" != "$UPSTREAM_VER" ]; then
+              echo "major_change=true" >> $GITHUB_OUTPUT
+              echo "检测到内核主版本变化: $CURRENT_VER -> $UPSTREAM_VER"
+            else
+              echo "major_change=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "major_change=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: 尝试合并上游
+        id: merge
+        continue-on-error: true
+        run: |
+          # 尝试合并上游主分支
+          if git merge upstream/main --no-edit; then
+            echo "merge_status=success" >> $GITHUB_OUTPUT
+            echo "合并成功，无冲突"
+          else
+            echo "merge_status=conflict" >> $GITHUB_OUTPUT
+            echo "检测到合并冲突"
+          fi
+      
+      - name: 处理冲突
+        if: steps.merge.outputs.merge_status == 'conflict'
+        id: resolve
+        run: |
+          # 初始化状态变量
+          CONFLICTS_RESOLVED=true
+          NEED_ISSUE=false
+          ISSUE_TITLE=""
+          ISSUE_BODY=""
+          
+          # 获取冲突文件列表
+          CONFLICT_FILES=$(git diff --name-only --diff-filter=U)
+          echo "冲突文件:"
+          echo "$CONFLICT_FILES"
+          
+          # 检查是否有 ath11k-firmware/Makefile 冲突
+          if echo "$CONFLICT_FILES" | grep -q "package/firmware/ath11k-firmware/Makefile"; then
+            echo "检测到 ath11k-firmware/Makefile 冲突，保持本地版本"
+            git checkout --ours package/firmware/ath11k-firmware/Makefile
+            git add package/firmware/ath11k-firmware/Makefile
+          fi
+          
+          # 检查 target/linux/qualcommax/ 目录中的冲突
+          QUALCOMMAX_CONFLICTS=$(echo "$CONFLICT_FILES" | grep "^target/linux/qualcommax/" || true)
+          if [ -n "$QUALCOMMAX_CONFLICTS" ]; then
+            echo "检测到 qualcommax 目录冲突"
+            
+            # 检查是否涉及 GL-AXT1800 特定内容
+            AXT1800_CONFLICTS=""
+            for file in $QUALCOMMAX_CONFLICTS; do
+              if git diff "$file" | grep -iE "(axt1800|gl-axt1800|glinet_gl-axt1800)"; then
+                AXT1800_CONFLICTS="$AXT1800_CONFLICTS $file"
+              fi
+            done
+            
+            if [ -n "$AXT1800_CONFLICTS" ]; then
+              echo "检测到 GL-AXT1800 相关冲突，需要手动处理"
+              CONFLICTS_RESOLVED=false
+              NEED_ISSUE=true
+              ISSUE_TITLE="上游同步: GL-AXT1800 设备相关冲突需要手动解决"
+              ISSUE_BODY="在同步 openwrt/openwrt 上游代码时，检测到以下 GL-AXT1800 设备相关文件存在冲突:\n\n"
+              for file in $AXT1800_CONFLICTS; do
+                ISSUE_BODY="${ISSUE_BODY}- \`$file\`\n"
+              done
+              ISSUE_BODY="${ISSUE_BODY}\n这些冲突涉及 GL-AXT1800 设备支持，需要维护者手动审查和解决。"
+            else
+              echo "冲突不涉及 GL-AXT1800，尝试接受上游更改"
+              for file in $QUALCOMMAX_CONFLICTS; do
+                # 接受上游版本，但需要验证不会破坏 GL-AXT1800 支持
+                git checkout --theirs "$file"
+                git add "$file"
+              done
+            fi
+          fi
+          
+          # 处理其他冲突
+          OTHER_CONFLICTS=$(echo "$CONFLICT_FILES" | grep -v "^target/linux/qualcommax/" | grep -v "package/firmware/ath11k-firmware/Makefile" || true)
+          if [ -n "$OTHER_CONFLICTS" ]; then
+            echo "尝试自动解决其他冲突"
+            for file in $OTHER_CONFLICTS; do
+              # 尝试接受上游版本
+              if git checkout --theirs "$file" 2>/dev/null; then
+                git add "$file"
+              else
+                echo "无法自动解决 $file 的冲突"
+                CONFLICTS_RESOLVED=false
+                if [ "$NEED_ISSUE" = false ]; then
+                  NEED_ISSUE=true
+                  ISSUE_TITLE="上游同步: 检测到无法自动解决的冲突"
+                  ISSUE_BODY="在同步 openwrt/openwrt 上游代码时，以下文件存在无法自动解决的冲突:\n\n"
+                fi
+                ISSUE_BODY="${ISSUE_BODY}- \`$file\`\n"
+              fi
+            done
+          fi
+          
+          # 检查是否还有未解决的冲突
+          REMAINING_CONFLICTS=$(git diff --name-only --diff-filter=U || true)
+          if [ -n "$REMAINING_CONFLICTS" ]; then
+            echo "仍有未解决的冲突:"
+            echo "$REMAINING_CONFLICTS"
+            CONFLICTS_RESOLVED=false
+            if [ "$NEED_ISSUE" = false ]; then
+              NEED_ISSUE=true
+              ISSUE_TITLE="上游同步: 检测到无法自动解决的冲突"
+              ISSUE_BODY="在同步 openwrt/openwrt 上游代码时，以下文件存在冲突:\n\n"
+              for file in $REMAINING_CONFLICTS; do
+                ISSUE_BODY="${ISSUE_BODY}- \`$file\`\n"
+              done
+            fi
+          fi
+          
+          echo "conflicts_resolved=$CONFLICTS_RESOLVED" >> $GITHUB_OUTPUT
+          echo "need_issue=$NEED_ISSUE" >> $GITHUB_OUTPUT
+          echo "issue_title=$ISSUE_TITLE" >> $GITHUB_OUTPUT
+          # 转义换行符用于 GitHub Actions
+          echo "issue_body<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$ISSUE_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          if [ "$CONFLICTS_RESOLVED" = true ]; then
+            # 完成合并
+            git commit -m "Merge upstream changes with auto-resolved conflicts"
+            echo "冲突已自动解决"
+          else
+            # 中止合并
+            git merge --abort
+            echo "冲突需要手动处理"
+          fi
+      
+      - name: 验证 GL-AXT1800 支持未被破坏
+        if: steps.merge.outputs.merge_status == 'success' || steps.resolve.outputs.conflicts_resolved == 'true'
+        id: validate
+        run: |
+          # 检查关键文件是否存在
+          if [ ! -f "target/linux/qualcommax/dts/ipq6000-gl-axt1800.dts" ]; then
+            echo "错误: GL-AXT1800 设备树文件丢失"
+            echo "validation_failed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          if ! grep -q "glinet_gl-axt1800" target/linux/qualcommax/image/ipq60xx.mk; then
+            echo "错误: GL-AXT1800 设备定义丢失"
+            echo "validation_failed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "validation_failed=false" >> $GITHUB_OUTPUT
+          echo "GL-AXT1800 支持验证通过"
+      
+      - name: 推送更改
+        if: (steps.merge.outputs.merge_status == 'success' || steps.resolve.outputs.conflicts_resolved == 'true') && steps.validate.outputs.validation_failed == 'false'
+        run: |
+          git push origin main
+      
+      - name: 创建内核版本变化 Issue
+        if: steps.kernel_check.outputs.major_change == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const currentVer = '${{ steps.kernel_check.outputs.current_ver }}';
+            const upstreamVer = '${{ steps.kernel_check.outputs.upstream_ver }}';
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `上游同步: 检测到内核主版本变化 (${currentVer} -> ${upstreamVer})`,
+              body: `## 内核版本变化通知\n\n在同步 openwrt/openwrt 上游代码时，检测到内核主版本发生变化:\n\n- 当前版本: \`${currentVer}\`\n- 上游版本: \`${upstreamVer}\`\n\n这可能需要:\n1. 更新内核配置\n2. 更新/调整 NSS 补丁\n3. 重新验证设备支持\n4. 更新构建配置\n\n请维护者审查此变化并采取必要措施。\n\n**工作流运行**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+              labels: ['upstream-sync', 'kernel-update']
+            });
+      
+      - name: 创建冲突 Issue
+        if: steps.resolve.outputs.need_issue == 'true' || steps.validate.outputs.validation_failed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let title = '${{ steps.resolve.outputs.issue_title }}';
+            let body = `${{ steps.resolve.outputs.issue_body }}`;
+            
+            if ('${{ steps.validate.outputs.validation_failed }}' === 'true') {
+              title = '上游同步: GL-AXT1800 设备支持验证失败';
+              body = '在合并上游更改后，GL-AXT1800 设备支持验证失败。关键文件可能被删除或修改。\n\n请维护者立即检查并修复。';
+            }
+            
+            body += `\n\n**工作流运行**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['upstream-sync']
+            });
+      
+      - name: 同步完成通知
+        if: success() && (steps.merge.outputs.merge_status == 'success' || steps.resolve.outputs.conflicts_resolved == 'true') && steps.validate.outputs.validation_failed == 'false'
+        run: |
+          echo "✅ 上游同步成功完成"
+          echo "已推送到主分支"

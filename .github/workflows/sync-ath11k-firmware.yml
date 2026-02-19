@@ -1,0 +1,143 @@
+# ath11k 固件跟踪工作流
+# 跟踪 VIKINGYFY/ath11k-firmware-ddwrt.git 的固件更新
+name: Sync ath11k Firmware
+
+on:
+  # 每天凌晨5点运行
+  schedule:
+    - cron: '0 5 * * *'
+  # 支持手动触发
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync-firmware:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 配置 Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: 检查上游固件版本
+        id: check_upstream
+        run: |
+          # 获取上游仓库最新提交
+          UPSTREAM_REPO="https://github.com/VIKINGYFY/ath11k-firmware-ddwrt.git"
+          LATEST_COMMIT=$(git ls-remote "$UPSTREAM_REPO" HEAD | cut -f1)
+          
+          echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+          echo "上游最新提交: $LATEST_COMMIT"
+          
+          # 获取当前 Makefile 中的版本
+          CURRENT_VERSION=$(grep "PKG_SOURCE_VERSION:=" package/firmware/ath11k-firmware/Makefile | cut -d'=' -f2)
+          CURRENT_DATE=$(grep "PKG_SOURCE_DATE:=" package/firmware/ath11k-firmware/Makefile | cut -d'=' -f2)
+          
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "current_date=$CURRENT_DATE" >> $GITHUB_OUTPUT
+          echo "当前版本: $CURRENT_VERSION (日期: $CURRENT_DATE)"
+          
+          # 比较版本
+          if [ "$LATEST_COMMIT" != "$CURRENT_VERSION" ]; then
+            echo "has_update=true" >> $GITHUB_OUTPUT
+            echo "检测到固件更新"
+          else
+            echo "has_update=false" >> $GITHUB_OUTPUT
+            echo "固件已是最新版本"
+          fi
+      
+      - name: 计算新的固件哈希
+        if: steps.check_upstream.outputs.has_update == 'true'
+        id: calc_hash
+        run: |
+          # 克隆上游仓库到临时目录
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          
+          git clone --bare https://github.com/VIKINGYFY/ath11k-firmware-ddwrt.git repo.git
+          cd repo.git
+          
+          # 获取指定提交的归档
+          COMMIT="${{ steps.check_upstream.outputs.latest_commit }}"
+          git archive --format=tar --prefix=ath11k-firmware/ "$COMMIT" | gzip > ../archive.tar.gz
+          
+          # 计算哈希
+          HASH=$(sha256sum ../archive.tar.gz | cut -d' ' -f1)
+          echo "new_hash=$HASH" >> $GITHUB_OUTPUT
+          echo "新固件哈希: $HASH"
+          
+          # 清理
+          cd /
+          rm -rf "$TEMP_DIR"
+      
+      - name: 更新 Makefile
+        if: steps.check_upstream.outputs.has_update == 'true'
+        run: |
+          MAKEFILE="package/firmware/ath11k-firmware/Makefile"
+          NEW_COMMIT="${{ steps.check_upstream.outputs.latest_commit }}"
+          NEW_HASH="${{ steps.calc_hash.outputs.new_hash }}"
+          NEW_DATE=$(date +%Y-%m-%d)
+          
+          # 更新版本号
+          sed -i "s/PKG_SOURCE_DATE:=.*/PKG_SOURCE_DATE:=$NEW_DATE/" "$MAKEFILE"
+          sed -i "s/PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=$NEW_COMMIT/" "$MAKEFILE"
+          sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=$NEW_HASH/" "$MAKEFILE"
+          
+          echo "Makefile 已更新"
+          git diff "$MAKEFILE"
+      
+      - name: 验证更改
+        if: steps.check_upstream.outputs.has_update == 'true'
+        id: validate
+        run: |
+          # 检查 Makefile 是否有有效更改
+          if ! git diff --quiet package/firmware/ath11k-firmware/Makefile; then
+            echo "changes_valid=true" >> $GITHUB_OUTPUT
+            echo "检测到有效更改"
+          else
+            echo "changes_valid=false" >> $GITHUB_OUTPUT
+            echo "没有有效更改"
+          fi
+      
+      - name: 提交并推送更改
+        if: steps.check_upstream.outputs.has_update == 'true' && steps.validate.outputs.changes_valid == 'true'
+        run: |
+          git add package/firmware/ath11k-firmware/Makefile
+          git commit -m "ath11k-firmware: 更新到最新版本 ${{ steps.check_upstream.outputs.latest_commit }}
+          
+          - 更新日期: $(date +%Y-%m-%d)
+          - 提交哈希: ${{ steps.check_upstream.outputs.latest_commit }}
+          - 固件哈希: ${{ steps.calc_hash.outputs.new_hash }}
+          
+          来自 VIKINGYFY/ath11k-firmware-ddwrt.git"
+          
+          git push origin main
+          echo "✅ 固件更新已推送到主分支"
+      
+      - name: 创建更新失败 Issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'ath11k 固件同步失败',
+              body: `## ath11k 固件更新失败\n\n在尝试从 VIKINGYFY/ath11k-firmware-ddwrt.git 同步固件更新时失败。\n\n**可能的原因**:\n- 上游仓库无法访问\n- 哈希计算失败\n- Git 推送失败\n\n请检查工作流日志以获取详细信息。\n\n**工作流运行**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+              labels: ['ath11k-firmware']
+            });
+      
+      - name: 同步完成通知
+        if: steps.check_upstream.outputs.has_update == 'false'
+        run: |
+          echo "ℹ️ ath11k 固件已是最新版本，无需更新"

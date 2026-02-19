@@ -1,0 +1,217 @@
+# NSS 补丁同步工作流
+# 跟踪 qosmio/openwrt-ipq main-nss 分支的 mac80211 和 NSS 相关补丁
+name: Sync NSS Patches
+
+on:
+  # 每天凌晨6点运行
+  schedule:
+    - cron: '0 6 * * *'
+  # 支持手动触发
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+jobs:
+  sync-patches:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 配置 Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: 添加上游 NSS 仓库
+        run: |
+          git remote add nss-upstream https://github.com/qosmio/openwrt-ipq.git || true
+          git fetch nss-upstream main-nss
+      
+      - name: 检查 NSS 补丁更新
+        id: check_patches
+        run: |
+          # 获取 NSS 上游的最新提交
+          LATEST_NSS_COMMIT=$(git rev-parse nss-upstream/main-nss)
+          echo "latest_nss_commit=$LATEST_NSS_COMMIT" >> $GITHUB_OUTPUT
+          echo "NSS 上游最新提交: $LATEST_NSS_COMMIT"
+          
+          # 检查是否有 NSS 补丁跟踪文件
+          if [ -f ".nss-patches-version" ]; then
+            CURRENT_NSS_COMMIT=$(cat .nss-patches-version)
+            echo "current_nss_commit=$CURRENT_NSS_COMMIT" >> $GITHUB_OUTPUT
+            echo "当前 NSS 补丁版本: $CURRENT_NSS_COMMIT"
+          else
+            CURRENT_NSS_COMMIT=""
+            echo "current_nss_commit=" >> $GITHUB_OUTPUT
+            echo "首次同步 NSS 补丁"
+          fi
+          
+          # 比较版本
+          if [ "$LATEST_NSS_COMMIT" != "$CURRENT_NSS_COMMIT" ]; then
+            echo "has_update=true" >> $GITHUB_OUTPUT
+            echo "检测到 NSS 补丁更新"
+          else
+            echo "has_update=false" >> $GITHUB_OUTPUT
+            echo "NSS 补丁已是最新版本"
+          fi
+      
+      - name: 分析补丁变化
+        if: steps.check_patches.outputs.has_update == 'true'
+        id: analyze
+        run: |
+          # 创建临时目录
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          
+          # 克隆 NSS 上游仓库
+          git clone --depth 50 --branch main-nss https://github.com/qosmio/openwrt-ipq.git nss-repo
+          cd nss-repo
+          
+          # 检查关键目录的变化
+          HAS_MAC80211_CHANGES=false
+          HAS_NSS_CHANGES=false
+          
+          CURRENT_COMMIT="${{ steps.check_patches.outputs.current_nss_commit }}"
+          LATEST_COMMIT="${{ steps.check_patches.outputs.latest_nss_commit }}"
+          
+          if [ -n "$CURRENT_COMMIT" ]; then
+            # 检查 mac80211 相关变化
+            if git diff "$CURRENT_COMMIT" "$LATEST_COMMIT" -- package/kernel/mac80211 | grep -v "^index\|^diff\|^---\|^+++" | grep -q "^+\|^-"; then
+              HAS_MAC80211_CHANGES=true
+              echo "检测到 mac80211 相关变化"
+            fi
+            
+            # 检查 NSS 包相关变化（在 feeds 中）
+            if git diff "$CURRENT_COMMIT" "$LATEST_COMMIT" -- feeds.conf.default | grep -q "nss-packages\|sqm-scripts-nss"; then
+              HAS_NSS_CHANGES=true
+              echo "检测到 NSS 包配置变化"
+            fi
+            
+            # 检查 qualcommax 目标相关变化
+            if git diff "$CURRENT_COMMIT" "$LATEST_COMMIT" -- target/linux/qualcommax | grep -v "^index\|^diff\|^---\|^+++" | grep -q "^+\|^-"; then
+              HAS_NSS_CHANGES=true
+              echo "检测到 qualcommax 目标相关变化"
+            fi
+          else
+            # 首次同步，假设有更新
+            HAS_MAC80211_CHANGES=true
+            HAS_NSS_CHANGES=true
+          fi
+          
+          echo "has_mac80211_changes=$HAS_MAC80211_CHANGES" >> $GITHUB_OUTPUT
+          echo "has_nss_changes=$HAS_NSS_CHANGES" >> $GITHUB_OUTPUT
+          
+          # 清理
+          cd /
+          rm -rf "$TEMP_DIR"
+      
+      - name: 同步 NSS 补丁
+        if: steps.check_patches.outputs.has_update == 'true' && (steps.analyze.outputs.has_mac80211_changes == 'true' || steps.analyze.outputs.has_nss_changes == 'true')
+        id: sync
+        run: |
+          # 创建临时目录
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          
+          # 克隆 NSS 上游仓库
+          git clone --branch main-nss https://github.com/qosmio/openwrt-ipq.git nss-repo
+          cd nss-repo
+          LATEST_COMMIT="${{ steps.check_patches.outputs.latest_nss_commit }}"
+          git checkout "$LATEST_COMMIT"
+          
+          # 返回工作目录
+          cd /home/runner/work/openwrt-6.x/openwrt-6.x
+          
+          # 复制 mac80211 补丁（如果有更改）
+          if [ "${{ steps.analyze.outputs.has_mac80211_changes }}" = "true" ]; then
+            echo "同步 mac80211 补丁..."
+            if [ -d "$TEMP_DIR/nss-repo/package/kernel/mac80211/patches" ]; then
+              mkdir -p package/kernel/mac80211/patches
+              cp -r "$TEMP_DIR/nss-repo/package/kernel/mac80211/patches/"* package/kernel/mac80211/patches/ || true
+            fi
+          fi
+          
+          # 更新版本跟踪文件
+          echo "$LATEST_COMMIT" > .nss-patches-version
+          
+          # 清理
+          rm -rf "$TEMP_DIR"
+          
+          # 检查是否有实际变化
+          if git diff --quiet; then
+            echo "sync_made_changes=false" >> $GITHUB_OUTPUT
+            echo "没有实际文件变化"
+          else
+            echo "sync_made_changes=true" >> $GITHUB_OUTPUT
+            echo "检测到文件变化"
+          fi
+      
+      - name: 提交 NSS 补丁更新
+        if: steps.sync.outputs.sync_made_changes == 'true'
+        run: |
+          git add -A
+          git commit -m "nss-patches: 同步 qosmio/openwrt-ipq main-nss 分支补丁
+          
+          - NSS 补丁版本: ${{ steps.check_patches.outputs.latest_nss_commit }}
+          - mac80211 变化: ${{ steps.analyze.outputs.has_mac80211_changes }}
+          - NSS 包变化: ${{ steps.analyze.outputs.has_nss_changes }}
+          
+          来自 qosmio/openwrt-ipq main-nss 分支"
+          
+          git push origin main
+          echo "✅ NSS 补丁更新已推送到主分支"
+      
+      - name: 触发构建验证
+        if: steps.sync.outputs.sync_made_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'build-verify.yml',
+              ref: 'main',
+              inputs: {
+                trigger_reason: 'nss-patches-update'
+              }
+            });
+            console.log('已触发构建验证工作流');
+      
+      - name: 创建更新通知 Issue（如果有重大变化）
+        if: steps.sync.outputs.sync_made_changes == 'true' && steps.analyze.outputs.has_mac80211_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'NSS 补丁已更新 - 请验证 mac80211 变化',
+              body: `## NSS 补丁更新通知\n\n已从 qosmio/openwrt-ipq (main-nss) 同步新的补丁:\n\n- **NSS 版本**: \`${{ steps.check_patches.outputs.latest_nss_commit }}\`\n- **mac80211 变化**: ✅\n- **NSS 包变化**: ${{ steps.analyze.outputs.has_nss_changes == 'true' && '✅' || '❌' }}\n\n由于检测到 mac80211 相关变化，建议:\n1. 验证无线功能正常\n2. 检查 NSS 卸载是否工作\n3. 测试 GL-AXT1800 设备\n\n构建验证工作流已自动触发。\n\n**工作流运行**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+              labels: ['nss-patches']
+            });
+      
+      - name: 创建同步失败 Issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'NSS 补丁同步失败',
+              body: `## NSS 补丁同步失败\n\n在尝试从 qosmio/openwrt-ipq (main-nss) 同步补丁时失败。\n\n**可能的原因**:\n- 上游仓库无法访问\n- 补丁应用冲突\n- Git 推送失败\n\n请检查工作流日志以获取详细信息。\n\n**工作流运行**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+              labels: ['nss-patches', 'build-failure']
+            });
+      
+      - name: 同步完成通知
+        if: steps.check_patches.outputs.has_update == 'false'
+        run: |
+          echo "ℹ️ NSS 补丁已是最新版本，无需更新"

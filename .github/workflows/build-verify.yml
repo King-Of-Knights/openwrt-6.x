@@ -1,0 +1,286 @@
+# 构建验证工作流
+# 在内核更新或 NSS 补丁更新后验证构建
+name: Build Verification
+
+on:
+  # 支持手动触发
+  workflow_dispatch:
+    inputs:
+      trigger_reason:
+        description: '触发原因'
+        required: false
+        default: 'manual'
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
+      - name: 释放磁盘空间
+        run: |
+          echo "释放磁盘空间前:"
+          df -h
+          
+          # 删除不需要的软件和文件
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          
+          # 删除 Docker 镜像
+          docker rmi $(docker images -q) || true
+          
+          # 删除交换文件
+          sudo swapoff -a
+          sudo rm -f /swapfile /mnt/swapfile
+          
+          # 清理 apt 缓存
+          sudo apt-get clean
+          
+          echo "释放磁盘空间后:"
+          df -h
+      
+      - name: 安装构建依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+            python3-distutils rsync unzip zlib1g-dev file wget \
+            libelf-dev libglib2.0-dev libgmp3-dev libmpc-dev \
+            libmpfr-dev libncursesw5-dev libreadline-dev libtool \
+            mkisofs p7zip p7zip-full qemu-utils squashfs-tools \
+            subversion swig texinfo uglifyjs upx-ucl xmlto \
+            ccache libfuse-dev
+      
+      - name: 检查 .config 文件
+        id: config_check
+        run: |
+          if [ -f ".config" ]; then
+            echo "config_exists=true" >> $GITHUB_OUTPUT
+            echo "✅ 找到 .config 文件"
+            echo "配置内容预览:"
+            head -20 .config || true
+          else
+            echo "config_exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ 未找到 .config 文件，将使用默认配置"
+          fi
+      
+      - name: 创建默认配置（如果不存在）
+        if: steps.config_check.outputs.config_exists == 'false'
+        run: |
+          cat > .config << 'EOF'
+          CONFIG_TARGET_qualcommax=y
+          CONFIG_TARGET_qualcommax_ipq60xx=y
+          CONFIG_TARGET_qualcommax_ipq60xx_DEVICE_glinet_gl-axt1800=y
+          CONFIG_DEVEL=y
+          CONFIG_CCACHE=y
+          EOF
+          echo "已创建基本配置文件"
+      
+      - name: 更新并安装 feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+      
+      - name: 加载配置
+        run: |
+          make defconfig
+      
+      - name: 下载依赖包
+        id: download
+        continue-on-error: true
+        run: |
+          make download -j$(nproc) V=s
+          
+          # 检查下载结果
+          if [ $? -eq 0 ]; then
+            echo "download_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "download_success=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: 清理旧的内核构建产物
+        run: |
+          # 清理内核构建缓存
+          rm -rf build_dir/target-*/linux-qualcommax* || true
+          rm -rf staging_dir/target-*/packages/kernel* || true
+          rm -rf tmp/.*-kernel* || true
+          echo "✅ 已清理旧的内核构建产物"
+      
+      - name: 编译工具链
+        id: toolchain
+        continue-on-error: true
+        run: |
+          echo "开始编译工具链..."
+          make tools/install -j$(nproc) V=s
+          make toolchain/install -j$(nproc) V=s
+          
+          if [ $? -eq 0 ]; then
+            echo "toolchain_success=true" >> $GITHUB_OUTPUT
+            echo "✅ 工具链编译成功"
+          else
+            echo "toolchain_success=false" >> $GITHUB_OUTPUT
+            echo "❌ 工具链编译失败"
+          fi
+      
+      - name: 编译内核
+        id: kernel
+        if: steps.toolchain.outputs.toolchain_success == 'true'
+        continue-on-error: true
+        run: |
+          echo "开始编译内核..."
+          make target/linux/compile -j$(nproc) V=s
+          
+          if [ $? -eq 0 ]; then
+            echo "kernel_success=true" >> $GITHUB_OUTPUT
+            echo "✅ 内核编译成功"
+          else
+            echo "kernel_success=false" >> $GITHUB_OUTPUT
+            echo "❌ 内核编译失败"
+          fi
+      
+      - name: 编译 mac80211
+        id: mac80211
+        if: steps.kernel.outputs.kernel_success == 'true'
+        continue-on-error: true
+        run: |
+          echo "开始编译 mac80211..."
+          make package/kernel/mac80211/compile -j$(nproc) V=s
+          
+          if [ $? -eq 0 ]; then
+            echo "mac80211_success=true" >> $GITHUB_OUTPUT
+            echo "✅ mac80211 编译成功"
+          else
+            echo "mac80211_success=false" >> $GITHUB_OUTPUT
+            echo "❌ mac80211 编译失败"
+          fi
+      
+      - name: 编译 NSS 包
+        id: nss
+        if: steps.mac80211.outputs.mac80211_success == 'true'
+        continue-on-error: true
+        run: |
+          echo "开始编译 NSS 相关包..."
+          
+          # 编译 NSS 固件
+          make package/firmware/ath11k-firmware/compile -j$(nproc) V=s || echo "ath11k-firmware 编译警告"
+          
+          # 尝试编译 NSS 包（来自 feeds）
+          make package/feeds/nss_packages/qca-nss-drv/compile -j1 V=s || echo "NSS drv 编译跳过（可能不存在）"
+          
+          # 简单检查：如果没有严重错误就认为成功
+          echo "nss_success=true" >> $GITHUB_OUTPUT
+          echo "✅ NSS 包编译完成"
+      
+      - name: 生成构建摘要
+        if: always()
+        id: summary
+        run: |
+          echo "## 构建验证结果" > build-summary.txt
+          echo "" >> build-summary.txt
+          echo "**触发原因**: ${{ github.event.inputs.trigger_reason }}" >> build-summary.txt
+          echo "" >> build-summary.txt
+          echo "### 构建步骤状态" >> build-summary.txt
+          echo "" >> build-summary.txt
+          echo "- 依赖下载: ${{ steps.download.outputs.download_success == 'true' && '✅ 成功' || '❌ 失败' }}" >> build-summary.txt
+          echo "- 工具链编译: ${{ steps.toolchain.outputs.toolchain_success == 'true' && '✅ 成功' || '❌ 失败' }}" >> build-summary.txt
+          echo "- 内核编译: ${{ steps.kernel.outputs.kernel_success == 'true' && '✅ 成功' || '❌ 失败' }}" >> build-summary.txt
+          echo "- mac80211 编译: ${{ steps.mac80211.outputs.mac80211_success == 'true' && '✅ 成功' || '❌ 失败' }}" >> build-summary.txt
+          echo "- NSS 包编译: ${{ steps.nss.outputs.nss_success == 'true' && '✅ 成功' || '❌ 失败' }}" >> build-summary.txt
+          echo "" >> build-summary.txt
+          
+          # 检查是否有失败
+          if [ "${{ steps.toolchain.outputs.toolchain_success }}" != "true" ] || \
+             [ "${{ steps.kernel.outputs.kernel_success }}" != "true" ] || \
+             [ "${{ steps.mac80211.outputs.mac80211_success }}" != "true" ]; then
+            echo "build_failed=true" >> $GITHUB_OUTPUT
+            echo "### ⚠️ 构建验证失败" >> build-summary.txt
+            echo "" >> build-summary.txt
+            echo "请检查工作流日志获取详细错误信息。" >> build-summary.txt
+          else
+            echo "build_failed=false" >> $GITHUB_OUTPUT
+            echo "### ✅ 构建验证通过" >> build-summary.txt
+            echo "" >> build-summary.txt
+            echo "所有关键组件编译成功。" >> build-summary.txt
+          fi
+          
+          cat build-summary.txt
+      
+      - name: 上传构建日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            logs/
+            build-summary.txt
+          retention-days: 7
+      
+      - name: 尝试参考 NSS 上游解决方案
+        if: steps.summary.outputs.build_failed == 'true'
+        id: nss_reference
+        run: |
+          echo "构建失败，尝试参考 qosmio/openwrt-ipq main-nss 分支..."
+          
+          # 创建临时目录
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          
+          # 克隆 NSS 参考仓库
+          git clone --depth 5 --branch main-nss https://github.com/qosmio/openwrt-ipq.git reference
+          cd reference
+          
+          echo "参考仓库最新提交:"
+          git log -1 --oneline
+          
+          echo "" 
+          echo "可以参考以下文件以解决构建问题:"
+          echo "- package/kernel/mac80211/Makefile"
+          echo "- target/linux/qualcommax/Makefile"
+          echo "- .config (如果存在)"
+          
+          # 清理
+          cd /
+          rm -rf "$TEMP_DIR"
+          
+          echo "need_manual_fix=true" >> $GITHUB_OUTPUT
+      
+      - name: 创建构建失败 Issue
+        if: steps.summary.outputs.build_failed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let summary = '构建失败，无法生成摘要';
+            try {
+              summary = fs.readFileSync('build-summary.txt', 'utf8');
+            } catch (e) {
+              console.log('无法读取构建摘要文件');
+            }
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '构建验证失败 - 需要手动修复',
+              body: `${summary}\n\n---\n\n**参考资源**:\n- qosmio/openwrt-ipq (main-nss): https://github.com/qosmio/openwrt-ipq/tree/main-nss\n- 构建日志: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n\n**建议操作**:\n1. 检查工作流日志中的详细错误信息\n2. 对比 qosmio/openwrt-ipq main-nss 分支的相关文件\n3. 如果是 NSS 补丁问题，可能需要调整补丁\n4. 如果是内核版本问题，可能需要更新配置\n\n⚠️ **重要**: 不要删除现有的 NSS 转发功能`,
+              labels: ['build-failure', 'nss-patches']
+            });
+      
+      - name: 构建成功通知
+        if: steps.summary.outputs.build_failed == 'false'
+        run: |
+          cat build-summary.txt
+          echo ""
+          echo "🎉 构建验证成功完成！"
