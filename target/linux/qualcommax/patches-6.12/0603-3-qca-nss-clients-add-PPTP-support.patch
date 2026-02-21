@@ -1,6 +1,6 @@
 --- a/include/linux/if_pppox.h
 +++ b/include/linux/if_pppox.h
-@@ -36,6 +36,7 @@
+@@ -36,6 +36,7 @@ struct pptp_opt {
  	u32 ack_sent, ack_recv;
  	u32 seq_sent, seq_recv;
  	int ppp_flags;
@@ -8,18 +8,18 @@
  };
  #include <net/sock.h>
  
-@@ -80,6 +81,42 @@
- extern int pppox_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg);
- extern int pppox_compat_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg);
+@@ -100,8 +101,40 @@ struct pppoe_channel_ops {
+ 	int (*get_addressing)(struct ppp_channel *, struct pppoe_opt *);
+ };
  
-+/* Return PPPoE channel specific addressing information */
-+extern int pppoe_channel_addressing_get(struct ppp_channel *chan,
-+				 struct pppoe_opt *addressing);
-+
 +/* PPTP client callback */
 +typedef int (*pptp_gre_seq_offload_callback_t)(struct sk_buff *skb,
-+			       struct net_device *pptp_dev);
++					       struct net_device *pptp_dev);
 +
+ /* Return PPPoE channel specific addressing information */
+ extern int pppoe_channel_addressing_get(struct ppp_channel *chan,
+ 					 struct pppoe_opt *addressing);
+ 
 +/* Lookup PPTP session info and return PPTP session using sip, dip and local call id */
 +extern int pptp_session_find_by_src_callid(struct pptp_opt *opt, __be16 src_call_id,
 +			 __be32 daddr, __be32 saddr);
@@ -30,74 +30,69 @@
 +
 +/* Return PPTP session information given the channel */
 +extern void pptp_channel_addressing_get(struct pptp_opt *opt,
-+					 struct ppp_channel *chan);
++					struct ppp_channel *chan);
 +
 +/* Enable the PPTP session offload flag */
 +extern int pptp_session_enable_offload_mode(__be16 peer_call_id,
-+				    __be32 peer_ip_addr);
++					    __be32 peer_ip_addr);
 +
 +/* Disable the PPTP session offload flag */
 +extern int pptp_session_disable_offload_mode(__be16 peer_call_id,
-+				     __be32 peer_ip_addr);
++					     __be32 peer_ip_addr);
 +
 +/* Register the PPTP GRE packets sequence number offload callback */
 +extern int
 +pptp_register_gre_seq_offload_callback(pptp_gre_seq_offload_callback_t
-+			       pptp_client_cb);
++				       pptp_client_cb);
 +
 +/* Unregister the PPTP GRE packets sequence number offload callback */
 +extern void pptp_unregister_gre_seq_offload_callback(void);
 +
- #define PPPOEIOCSFWD32    _IOW(0xB1 ,0, compat_size_t)
- 
- /* PPPoX socket states */
---- a/include/linux/ppp_channel.h
-+++ b/include/linux/ppp_channel.h
-@@ -78,6 +78,9 @@
- /* Get the channel number for a channel */
- extern int ppp_channel_index(struct ppp_channel *);
- 
-+/* Get the device index  associated with a channel, or 0, if none */
-+extern int ppp_dev_index(struct ppp_channel *);
-+
- /* Get the unit number associated with a channel, or -1 if none */
- extern int ppp_unit_number(struct ppp_channel *);
- 
+ #endif /* !(__LINUX_IF_PPPOX_H) */
 --- a/drivers/net/ppp/ppp_generic.c
 +++ b/drivers/net/ppp/ppp_generic.c
-@@ -2987,6 +2987,21 @@
- 	return name;
+@@ -3750,6 +3750,28 @@ void ppp_update_stats(struct net_device
+ 	ppp_recv_unlock(ppp);
  }
  
-+/* Return the PPP net device index */
-+int ppp_dev_index(struct ppp_channel *chan)
++/* Returns true if Compression is enabled on PPP device
++ */
++bool ppp_is_cp_enabled(struct net_device *dev)
 +{
-+	struct channel *pch = chan->ppp;
-+	int ifindex = 0;
++	struct ppp *ppp;
++	bool flag = false;
 +
-+	if (pch) {
-+		spin_lock_bh(&pch->upl);
-+		if (pch->ppp && pch->ppp->dev)
-+			ifindex = pch->ppp->dev->ifindex;
-+		spin_unlock_bh(&pch->upl);
-+	}
-+	return ifindex;
++	if (!dev)
++		return false;
++
++	if (dev->type != ARPHRD_PPP)
++		return false;
++
++	ppp = netdev_priv(dev);
++	ppp_lock(ppp);
++	flag = !!(ppp->xstate & SC_COMP_RUN) || !!(ppp->rstate & SC_DECOMP_RUN);
++	ppp_unlock(ppp);
++
++	return flag;
 +}
++EXPORT_SYMBOL(ppp_is_cp_enabled);
 +
- /* Call this to obtain the underlying protocol of the PPP channel */
- int ppp_channel_get_protocol(struct ppp_channel *chan)
- {
-@@ -3843,6 +3858,7 @@
- EXPORT_SYMBOL(ppp_channel_index);
- EXPORT_SYMBOL(ppp_unit_number);
- EXPORT_SYMBOL(ppp_dev_name);
-+EXPORT_SYMBOL(ppp_dev_index);
- EXPORT_SYMBOL(ppp_input);
- EXPORT_SYMBOL(ppp_input_error);
- EXPORT_SYMBOL(ppp_output_wakeup);
+ /* Returns >0 if the device is a multilink PPP netdevice, 0 if not or < 0 if
+  * the device is not PPP.
+  */
+--- a/include/linux/ppp_channel.h
++++ b/include/linux/ppp_channel.h
+@@ -121,6 +121,7 @@ extern int __ppp_hold_channels(struct ne
+ /* Test if ppp xmit lock is locked */
+ extern bool ppp_is_xmit_locked(struct net_device *dev);
+ 
++bool ppp_is_cp_enabled(struct net_device *dev);
+ /* Test if the ppp device is a multi-link ppp device */
+ extern int ppp_is_multilink(struct net_device *dev);
+ extern int __ppp_is_multilink(struct net_device *dev);
 --- a/drivers/net/ppp/pptp.c
 +++ b/drivers/net/ppp/pptp.c
-@@ -50,6 +50,8 @@
+@@ -50,6 +50,8 @@ static struct proto pptp_sk_proto __read
  static const struct ppp_channel_ops pptp_chan_ops;
  static const struct proto_ops pptp_ops;
  
@@ -106,7 +101,7 @@
  static struct pppox_sock *lookup_chan(u16 call_id, __be32 s_addr)
  {
  	struct pppox_sock *sock;
-@@ -91,6 +93,79 @@
+@@ -91,6 +93,79 @@ static int lookup_chan_dst(u16 call_id,
  	return i < MAX_CALLID;
  }
  
@@ -165,7 +160,7 @@
 + * offload module instead of network stack
 + */
 +static int pptp_client_skb_xmit(struct sk_buff *skb,
-+			    struct net_device *pptp_dev)
++				struct net_device *pptp_dev)
 +{
 +	pptp_gre_seq_offload_callback_t pptp_gre_offload_cb_f;
 +	int ret;
@@ -186,7 +181,7 @@
  static int add_chan(struct pppox_sock *sock,
  		    struct pptp_addr *sa)
  {
-@@ -136,7 +211,7 @@
+@@ -136,7 +211,7 @@ static struct rtable *pptp_route_output(
  	struct net *net;
  
  	net = sock_net(sk);
@@ -195,7 +190,7 @@
  			   RT_SCOPE_UNIVERSE, IPPROTO_GRE, 0,
  			   po->proto.pptp.dst_addr.sin_addr.s_addr,
  			   po->proto.pptp.src_addr.sin_addr.s_addr,
-@@ -161,8 +236,11 @@
+@@ -161,8 +236,11 @@ static int pptp_xmit(struct ppp_channel
  	__u32 seq_recv;
  	struct rtable *rt;
  	struct net_device *tdev;
@@ -207,7 +202,7 @@
  
  	if (sk_pppox(po)->sk_state & PPPOX_DEAD)
  		goto tx_drop;
-@@ -260,7 +338,32 @@
+@@ -260,7 +338,32 @@ static int pptp_xmit(struct ppp_channel
  	ip_select_ident(net, skb, NULL);
  	ip_send_check(iph);
  
@@ -241,7 +236,7 @@
  	return 1;
  
  tx_error:
-@@ -318,6 +421,12 @@
+@@ -318,6 +421,13 @@ static int pptp_rcv_core(struct sock *sk
  		goto drop;
  
  	payload = skb->data + headersize;
@@ -251,10 +246,11 @@
 +	  */
 +	if (opt->pptp_offload_mode)
 +		goto allow_packet;
++
  	/* check for expected sequence number */
  	if (seq < opt->seq_recv + 1 || WRAPPED(opt->seq_recv, seq)) {
  		if ((payload[0] == PPP_ALLSTATIONS) && (payload[1] == PPP_UI) &&
-@@ -375,6 +484,7 @@
+@@ -375,6 +485,7 @@ static int pptp_rcv(struct sk_buff *skb)
  	if (po) {
  		skb_dst_drop(skb);
  		nf_reset_ct(skb);
@@ -262,11 +258,19 @@
  		return sk_receive_skb(sk_pppox(po), skb, 0);
  	}
  drop:
-@@ -607,9 +717,171 @@
+@@ -478,7 +589,7 @@ static int pptp_connect(struct socket *s
+ 
+ 	opt->dst_addr = sp->sa_addr.pptp;
+ 	sk->sk_state |= PPPOX_CONNECTED;
+-
++	opt->pptp_offload_mode = false;
+  end:
+ 	release_sock(sk);
+ 	return error;
+@@ -608,9 +719,169 @@ static int pptp_ppp_ioctl(struct ppp_cha
  	return err;
  }
  
-+
 +/* pptp_channel_addressing_get()
 + *	Return PPTP channel specific addressing information.
 + */
@@ -286,7 +290,7 @@
 +
 +	/* This is very unlikely, but check the socket is connected state */
 +	if (unlikely(sock_flag(sk, SOCK_DEAD) ||
-+	     !(sk->sk_state & PPPOX_CONNECTED))) {
++		     !(sk->sk_state & PPPOX_CONNECTED))) {
 +		sock_put(sk);
 +		return;
 +	}
@@ -327,7 +331,7 @@
 +
 + /* Function to change the offload mode true/false for a PPTP session */
 +static int pptp_set_offload_mode(bool accel_mode,
-+			 __be16 peer_call_id, __be32 peer_ip_addr)
++				 __be16 peer_call_id, __be32 peer_ip_addr)
 +{
 +	struct pppox_sock *sock;
 +	int i = 1;
@@ -375,7 +379,7 @@
 + * (PPP LCP) and data packets
 + */
 +int pptp_register_gre_seq_offload_callback(pptp_gre_seq_offload_callback_t
-+			   pptp_gre_offload_cb)
++					   pptp_gre_offload_cb)
 +{
 +	pptp_gre_seq_offload_callback_t pptp_gre_offload_cb_f;
 +
@@ -424,7 +428,6 @@
 +	return PX_PROTO_PPTP;
 +}
 +
-+
  static const struct ppp_channel_ops pptp_chan_ops = {
  	.start_xmit = pptp_xmit,
  	.ioctl      = pptp_ppp_ioctl,
@@ -434,47 +437,3 @@
  };
  
  static struct proto pptp_sk_proto __read_mostly = {
-@@ -700,4 +972,4 @@
- MODULE_DESCRIPTION("Point-to-Point Tunneling Protocol");
- MODULE_AUTHOR("D. Kozlov <xeb@mail.ru>");
- MODULE_LICENSE("GPL");
--MODULE_ALIAS_NET_PF_PROTO(PF_PPPOX, PX_PROTO_PPTP);
-+MODULE_ALIAS_NET_PF_PROTO(PF_PPPOX, PX_PROTO_PPTP);
-\ No newline at end of file
---- a/drivers/net/ppp/pppoe.c
-+++ b/drivers/net/ppp/pppoe.c
-@@ -1212,6 +1212,34 @@
- 	unregister_pernet_device(&pppoe_net_ops);
- }
- 
-+
-+/* Return PPPoE channel specific addressing information */
-+int pppoe_channel_addressing_get(struct ppp_channel *chan, struct pppoe_opt *addressing)
-+{
-+	struct sock *sk;
-+	struct pppox_sock *po;
-+
-+	if (!addressing || !chan)
-+		return -EINVAL;
-+
-+	sk = (struct sock *)chan->private;
-+	if (!sk)
-+		return -ENOTCONN;
-+
-+	sock_hold(sk);
-+
-+	if (unlikely(sock_flag(sk, SOCK_DEAD) ||
-+		     !(sk->sk_state & PPPOX_CONNECTED))) {
-+		sock_put(sk);
-+		return -ENOTCONN;
-+	}
-+
-+	po = pppox_sk(sk);
-+	memcpy(addressing, &po->proto.pppoe, sizeof(*addressing));
-+	sock_put(sk);
-+	return 0;
-+}
-+EXPORT_SYMBOL(pppoe_channel_addressing_get);
- module_init(pppoe_init);
- module_exit(pppoe_exit);
- 

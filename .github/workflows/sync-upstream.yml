@@ -12,6 +12,8 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      FORCE_BUILD: ${{ secrets.FORCE_BUILD || vars.FORCE_BUILD || '' }}
 
     steps:
       - name: 检出代码
@@ -79,7 +81,11 @@ jobs:
 
           git add package/firmware/ath11k-firmware/Makefile
           git commit -m "ath11k-firmware: sync from VIKINGYFY ($LATEST_COMMIT)"
-          git push origin main
+          if [ -n "${GITHUB_ACTIONS:-}" ] && [ -z "${ACT:-}" ]; then
+            git push origin main
+          else
+            echo "Skip push: not running in GitHub Actions"
+          fi
 
           echo "ath11k_updated=true" >> $GITHUB_OUTPUT
 
@@ -141,36 +147,42 @@ jobs:
             exit 0
           fi
 
-          if [ "$NEEDS_BUILD" = "true" ]; then
+          if [ "$NEEDS_BUILD" = "true" ] && { [ -z "${ACT:-}" ] || [ "${FORCE_BUILD:-}" = "1" ]; }; then
             sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
             sudo apt-get update
             sudo apt-get install -y \
               build-essential clang flex bison g++ gawk \
               gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
-              python3-distutils rsync unzip zlib1g-dev file wget \
+              rsync unzip zlib1g-dev file wget \
               libelf-dev libglib2.0-dev libgmp3-dev libmpc-dev \
               libmpfr-dev libncursesw5-dev libreadline-dev libtool \
               mkisofs p7zip p7zip-full qemu-utils squashfs-tools \
               subversion swig texinfo uglifyjs upx-ucl xmlto \
               ccache libfuse-dev
 
+            if [ "$(apt-cache policy python3-distutils | awk '/Candidate:/{print $2}')" != "(none)" ]; then
+              sudo apt-get install -y python3-distutils
+            else
+              sudo apt-get install -y python3-setuptools
+            fi
+
             ./scripts/feeds update -a
             ./scripts/feeds install -a
 
-            cat > .config << 'EOF'
-            CONFIG_TARGET_qualcommax=y
-            CONFIG_TARGET_qualcommax_ipq60xx=y
-            CONFIG_TARGET_qualcommax_ipq60xx_DEVICE_glinet_gl-axt1800=y
-            CONFIG_LINUX_6_12=y
-            CONFIG_PACKAGE_kmod-mac80211=y
-            CONFIG_PACKAGE_kmod-ath11k=y
-            CONFIG_PACKAGE_ath11k-firmware-ipq6018=y
-            CONFIG_PACKAGE_nss-firmware-ipq60xx=y
-            CONFIG_PACKAGE_kmod-qca-nss-dp=y
-            CONFIG_PACKAGE_kmod-qca-nss-drv=y
-            CONFIG_PACKAGE_kmod-qca-nss-drv-bridge-mgr=y
-            CONFIG_PACKAGE_kmod-qca-nss-ecm=y
-            EOF
+          cat > .config << 'EOF'
+          CONFIG_TARGET_qualcommax=y
+          CONFIG_TARGET_qualcommax_ipq60xx=y
+          CONFIG_TARGET_qualcommax_ipq60xx_DEVICE_glinet_gl-axt1800=y
+          CONFIG_LINUX_6_12=y
+          CONFIG_PACKAGE_kmod-mac80211=y
+          CONFIG_PACKAGE_kmod-ath11k=y
+          CONFIG_PACKAGE_ath11k-firmware-ipq6018=y
+          CONFIG_PACKAGE_nss-firmware-ipq60xx=y
+          CONFIG_PACKAGE_kmod-qca-nss-dp=y
+          CONFIG_PACKAGE_kmod-qca-nss-drv=y
+          CONFIG_PACKAGE_kmod-qca-nss-drv-bridge-mgr=y
+          CONFIG_PACKAGE_kmod-qca-nss-ecm=y
+          EOF
 
             make defconfig
             make tools/install -j$(nproc) V=s
@@ -186,11 +198,21 @@ jobs:
               package/feeds/nss_packages/nss-firmware-ipq60xx/compile; do
               make "$pkg" -j$(nproc) V=s
             done
+          elif [ "$NEEDS_BUILD" = "true" ]; then
+            echo "Skip build under act (local test). Set FORCE_BUILD=1 to run."
           fi
 
-          git commit -m "Merge upstream openwrt/main"
-          git push origin main
-          echo "pushed=true" >> $GITHUB_OUTPUT
+          if ! git diff --cached --quiet; then
+            git commit -m "Merge upstream openwrt/main"
+            if [ -n "${GITHUB_ACTIONS:-}" ] && [ -z "${ACT:-}" ]; then
+              git push origin main
+            else
+              echo "Skip push: not running in GitHub Actions"
+            fi
+            echo "pushed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No changes to commit after merge"
+          fi
 
       - name: 创建 Issue（需要人工处理时）
         if: steps.sync.outputs.need_issue == 'true'
