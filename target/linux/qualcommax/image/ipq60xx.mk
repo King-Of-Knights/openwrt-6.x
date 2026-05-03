@@ -124,6 +124,25 @@ define Device/jdcloud_re-ss-01
 endef
 TARGET_DEVICES += jdcloud_re-ss-01
 
+define Device/link_nn6000-v1
+	$(call Device/FitImage)
+	$(call Device/EmmcImage)
+	DEVICE_VENDOR := Link
+	DEVICE_MODEL := NN6000 v1
+	SOC := ipq6000
+	KERNEL_SIZE := 6144k
+	DEVICE_DTS_CONFIG := config@cp03-c1
+	DEVICE_PACKAGES := ipq-wifi-link_nn6000 kmod-fs-f2fs f2fs-tools
+	IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-rootfs | append-metadata
+endef
+TARGET_DEVICES += link_nn6000-v1
+
+define Device/link_nn6000-v2
+	$(Device/link_nn6000-v1)
+	DEVICE_MODEL := NN6000 v2
+endef
+TARGET_DEVICES += link_nn6000-v2
+
 define Device/linksys_mr
 	$(call Device/FitImage)
 	DEVICE_VENDOR := Linksys
@@ -234,17 +253,22 @@ define Device/qihoo_360v6
 endef
 TARGET_DEVICES += qihoo_360v6
 
-define Device/tplink_eap610-outdoor
+define Device/tplink_eap6xx-common
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
 	DEVICE_VENDOR := TP-Link
-	DEVICE_MODEL := EAP610-Outdoor
 	BLOCKSIZE := 128k
 	PAGESIZE := 2048
 	SOC := ipq6018
-	DEVICE_PACKAGES := ipq-wifi-tplink_eap610-outdoor
+	DEVICE_PACKAGES := kmod-phy-realtek
 	IMAGES += web-ui-factory.bin
 	IMAGE/web-ui-factory.bin := append-ubi | tplink-image-2022
+endef
+
+define Device/tplink_eap610-outdoor
+	$(call Device/tplink_eap6xx-common)
+	DEVICE_MODEL := EAP610-Outdoor
+	DEVICE_PACKAGES += ipq-wifi-tplink_eap610-outdoor
 	TPLINK_SUPPORT_STRING := SupportList:\r\n \
 		EAP610-Outdoor(TP-Link|UN|AX1800-D):1.0\r\n \
 		EAP610-Outdoor(TP-Link|JP|AX1800-D):1.0\r\n \
@@ -252,33 +276,20 @@ define Device/tplink_eap610-outdoor
 endef
 TARGET_DEVICES += tplink_eap610-outdoor
 
-define Device/tplink_eap623od-hd-v1
-	$(call Device/FitImage)
-	$(call Device/UbiFit)
-	DEVICE_VENDOR := TP-Link
+define Device/tplink_eap623-outdoor-hd-v1
+	$(call Device/tplink_eap6xx-common)
 	DEVICE_MODEL := EAP623-Outdoor HD
 	DEVICE_VARIANT := v1
-	BLOCKSIZE := 128k
-	PAGESIZE := 2048
-	SOC := ipq6018
-	DEVICE_PACKAGES := ipq-wifi-tplink_eap623-outdoor-hd-v1 kmod-phy-realtek
-	IMAGES += web-ui-factory.bin
-	IMAGE/web-ui-factory.bin := append-ubi | tplink-image-2022
+	DEVICE_PACKAGES += ipq-wifi-tplink_eap623-outdoor-hd-v1
 	TPLINK_SUPPORT_STRING := SupportList:\r\nEAP623-Outdoor HD(TP-Link|UN|AX1800-D):1.0\r\n
 endef
-TARGET_DEVICES += tplink_eap623od-hd-v1
+TARGET_DEVICES += tplink_eap623-outdoor-hd-v1
 
 define Device/tplink_eap625-outdoor-hd-v1
-	$(call Device/FitImage)
-	$(call Device/UbiFit)
-	DEVICE_VENDOR := TP-Link
-	DEVICE_MODEL := EAP625-Outdoor HD v1 and v1.6
-	BLOCKSIZE := 128k
-	PAGESIZE := 2048
-	SOC := ipq6018
-	DEVICE_PACKAGES := ipq-wifi-tplink_eap625-outdoor-hd-v1
-	IMAGES += web-ui-factory.bin
-	IMAGE/web-ui-factory.bin := append-ubi | tplink-image-2022
+	$(call Device/tplink_eap6xx-common)
+	DEVICE_MODEL := EAP625-Outdoor HD
+	DEVICE_VARIANT := v1
+	DEVICE_PACKAGES += ipq-wifi-tplink_eap625-outdoor-hd-v1
 	TPLINK_SUPPORT_STRING := SupportList:\r\n \
 		EAP625-Outdoor HD(TP-Link|UN|AX1800-D):1.0\r\n \
 		EAP625-Outdoor HD(TP-Link|CA|AX1800-D):1.0\r\n \

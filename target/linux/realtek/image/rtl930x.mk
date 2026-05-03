@@ -2,6 +2,16 @@
 
 include ./common.mk
 
+define Device/d-link_dgs-1250-28x
+  SOC := rtl9301
+  DEVICE_VENDOR := D-Link
+  DEVICE_MODEL := DGS-1250-28X
+  DEVICE_PACKAGES += kmod-hwmon-lm75
+  IMAGE_SIZE := 24576k
+  $(Device/kernel-lzma)
+endef
+TARGET_DEVICES += d-link_dgs-1250-28x
+
 define Device/hasivo_s1100w-8xgt-se
   SOC := rtl9303
   DEVICE_VENDOR := Hasivo
@@ -19,6 +29,15 @@ define Device/hasivo_s1100wp-8gt-se
   $(Device/kernel-lzma)
 endef
 TARGET_DEVICES += hasivo_s1100wp-8gt-se
+
+define Device/hasivo_s600wp-5gt-2sx-se
+  SOC := rtl9303
+  DEVICE_VENDOR := Hasivo
+  DEVICE_MODEL := S600WP-5GT-2SX-SE
+  IMAGE_SIZE := 12288k
+  $(Device/kernel-lzma)
+endef
+TARGET_DEVICES += hasivo_s600wp-5gt-2sx-se
 
 define Device/plasmacloud-common
   SOC := rtl9302
@@ -206,3 +225,20 @@ define Device/zyxel_xgs1250-12-b1
   DEVICE_VARIANT := B1
 endef
 TARGET_DEVICES += zyxel_xgs1250-12-b1
+
+define Device/zyxel_xmg1915-10e
+  SOC := rtl9302
+  ZYXEL_VERS := ABWE
+  DEVICE_VENDOR := Zyxel
+  DEVICE_MODEL := XMG1915-10E
+  FLASH_ADDR := 0xb5290000
+ifeq ($(IB),)
+  ARTIFACTS := loader.bin
+  ARTIFACT/loader.bin := \
+    rt-loader-standalone | \
+    zynsig
+endif
+  $(Device/rt-loader-bootbase)
+  IMAGE_SIZE := 13760k
+endef
+TARGET_DEVICES += zyxel_xmg1915-10e

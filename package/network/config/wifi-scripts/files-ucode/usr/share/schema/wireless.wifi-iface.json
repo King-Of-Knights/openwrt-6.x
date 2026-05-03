@@ -169,6 +169,10 @@
 			"description": "Management frame protection for Beacon frames",
 			"type": "boolean"
 		},
+		"bridge_isolate": {
+			"description": "Enable bridge port isolation for the wireless interface",
+			"type": "boolean"
+		},
 		"bss_load_update_period": {
 			"description": "BSS Load update period (in BUs)",
 			"type": "number",
@@ -760,6 +764,13 @@
 			"description": "Network Authentication Type",
 			"type": "string"
 		},
+		"network_vlan": {
+			"description": "Make a wireless interface a tagged member of extra VLANs",
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
 		"no_probe_resp_if_max_sta": {
 			"description": "Do not answer probe requests if iface_max_num_sta was reached",
 			"type": "boolean"
@@ -1041,7 +1052,11 @@
 		"uesa": {
 			"description": "Unauthenticated emergency service accessible",
 			"type": "boolean",
-			"default": false			
+			"default": false
+		},
+		"uuid": {
+			"description": "Device UUID used by WPS",
+			"type": "string"
 		},
 		"utf8_ssid": {
 			"description": "Whether the SSID is to be interpreted using UTF-8 encoding",

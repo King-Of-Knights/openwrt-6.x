@@ -17,7 +17,9 @@ DEVICE_VARS += \
         H3C_DEVICE_ID \
         H3C_PRODUCT_ID \
 	LINKSYS_HEADER \
-        ZYXEL_VERS
+	ZYNFW_BOARD \
+	ZYNFW_ALIGN \
+	ZYXEL_VERS
 
 define Build/rt-compress
 	$(STAGING_DIR_HOST)/bin/xz -9 --format=lzma --stdout "$@" > "$@.new"
@@ -160,6 +162,21 @@ define Device/uimage-rt-loader
 	KERNEL/rt-loader := kernel-bin | append-dtb | rt-compress | rt-loader
 	KERNEL := $$(KERNEL/rt-loader) | uImage none
 	KERNEL_INITRAMFS := $$(KERNEL/rt-loader) | uImage none
+endef
+
+define Device/rt-loader-bootbase
+	KERNEL/rt-compress := kernel-bin | append-dtb | rt-compress
+	KERNEL := $$(KERNEL/rt-compress) | uImage lzma
+	KERNEL_INITRAMFS := $$(KERNEL/rt-compress) | uImage lzma | rt-loader
+endef
+
+define Build/zynos-firmware
+	$(STAGING_DIR_HOST)/bin/mkzynfw \
+	    -B $(ZYNFW_BOARD) \
+	    -b $(KDIR)/loader-$(DEVICE_NAME).bin \
+	    -r $@:$(ZYNFW_ALIGN) \
+	    -o $@.new
+	mv $@.new $@
 endef
 
 include $(SUBTARGET).mk
