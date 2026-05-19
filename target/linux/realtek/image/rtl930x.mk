@@ -94,6 +94,33 @@ define Device/vimin_vm-s100-0800ms
 endef
 TARGET_DEVICES += vimin_vm-s100-0800ms
 
+define Device/xikestor_sks7300-4x4t
+  SOC := rtl9303
+  DEVICE_VENDOR := XikeStor
+  DEVICE_MODEL := SKS7300-4X4T
+  DEVICE_PACKAGES := kmod-hwmon-lm75
+  KERNEL_SIZE:= 8192k
+  IMAGE_SIZE := 28160k
+  KERNEL := \
+    kernel-bin | \
+    append-dtb | \
+    lzma | \
+    xikestor-sks7300-img
+  KERNEL_INITRAMFS := \
+    kernel-bin | \
+    append-dtb | \
+    lzma | \
+    xikestor-sks7300-img
+  IMAGE/sysupgrade.bin := \
+    append-kernel | \
+    pad-to 8192k | \
+    append-rootfs | \
+    pad-rootfs | \
+    check-size | \
+    append-metadata
+endef
+TARGET_DEVICES += xikestor_sks7300-4x4t
+
 define Device/xikestor_sks8300-8t
   SOC := rtl9303
   UIMAGE_MAGIC := 0x93000000
@@ -226,19 +253,34 @@ define Device/zyxel_xgs1250-12-b1
 endef
 TARGET_DEVICES += zyxel_xgs1250-12-b1
 
-define Device/zyxel_xmg1915-10e
+define Device/zyxel_xgs1930-28hp
+  SOC := rtl9301
+  DEVICE_MODEL := XGS1930-28HP
+  DEVICE_PACKAGES := kmod-hwmon-gpiofan
+  FLASH_ADDR := 0xb4260000
+  IMAGE_SIZE := 30336k
+  ZYNFW_ALIGN := 0x10000
+  $(Device/zyxel_zynos)
+endef
+TARGET_DEVICES += zyxel_xgs1930-28hp
+
+define Device/zyxel_xmg1915
   SOC := rtl9302
-  ZYXEL_VERS := ABWE
-  DEVICE_VENDOR := Zyxel
+  FLASH_ADDR := 0xb4270000
+  IMAGE_SIZE := 30336k
+  ZYNFW_ALIGN := 0x10000
+  $(Device/zyxel_zynos)
+endef
+
+define Device/zyxel_xmg1915-10e
   DEVICE_MODEL := XMG1915-10E
-  FLASH_ADDR := 0xb5290000
-ifeq ($(IB),)
-  ARTIFACTS := loader.bin
-  ARTIFACT/loader.bin := \
-    rt-loader-standalone | \
-    zynsig
-endif
-  $(Device/rt-loader-bootbase)
-  IMAGE_SIZE := 13760k
+  $(Device/zyxel_xmg1915)
 endef
 TARGET_DEVICES += zyxel_xmg1915-10e
+
+define Device/zyxel_xmg1915-10ep
+  DEVICE_MODEL := XMG1915-10EP
+  $(Device/zyxel_xmg1915)
+  DEVICE_PACKAGES := realtek-poe
+endef
+TARGET_DEVICES += zyxel_xmg1915-10ep
