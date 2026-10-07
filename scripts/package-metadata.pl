@@ -235,8 +235,8 @@ sub mconf_depends {
 		}
 
 		if ($condition) {
+			next if $depend eq $condition;
 			if ($m =~ /select/) {
-				next if $depend eq $condition;
 				$depend = "$depend if $condition";
 			} else {
 				next if $dep->{"$depend if $condition"};
