@@ -67,7 +67,7 @@ Signed-off-by: Sathishkumar Muruganandam <murugana@codeaurora.org>
  struct htt_resp_msg {
 --- a/drivers/net/wireless/ath/ath11k/dp_rx.c
 +++ b/drivers/net/wireless/ath/ath11k/dp_rx.c
-@@ -1849,6 +1849,8 @@ void ath11k_dp_htt_htc_t2h_msg_handler(s
+@@ -1848,6 +1848,8 @@ void ath11k_dp_htt_htc_t2h_msg_handler(s
  	u16 peer_mac_h16;
  	u16 ast_hash;
  	u16 hw_peer_id;
@@ -76,7 +76,7 @@ Signed-off-by: Sathishkumar Muruganandam <murugana@codeaurora.org>
  
  	ath11k_dbg(ab, ATH11K_DBG_DP_HTT, "dp_htt rx msg type :0x%0x\n", type);
  
-@@ -1884,15 +1886,29 @@ void ath11k_dp_htt_htc_t2h_msg_handler(s
+@@ -1883,15 +1885,29 @@ void ath11k_dp_htt_htc_t2h_msg_handler(s
  				     resp->peer_map_ev.info2);
  		hw_peer_id = FIELD_GET(HTT_T2H_PEER_MAP_INFO1_HW_PEER_ID,
  				       resp->peer_map_ev.info1);
