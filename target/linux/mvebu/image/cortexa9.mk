@@ -108,7 +108,7 @@ define Device/cznic_turris-omnia
     wpad-basic-mbedtls kmod-ath9k kmod-ath10k-ct ath10k-firmware-qca988x-ct \
     kmod-mt7915-firmware partx-utils kmod-i2c-mux-pca954x kmod-leds-turris-omnia \
     kmod-turris-omnia-mcu kmod-gpio-button-hotplug omnia-eeprom omnia-mcu-firmware \
-    omnia-mcutool kmod-dsa-mv88e6xxx
+    omnia-mcutool kmod-dsa-mv88e6xxx kmod-usb-storage-uas
   IMAGES := sysupgrade.img.gz
   IMAGE/sysupgrade.img.gz := boot-scr | boot-img | sdcard-img | libdeflate-gzip | append-metadata
   SUPPORTED_DEVICES += armada-385-turris-omnia
@@ -497,3 +497,17 @@ define Device/wd_cloud-mirror-gen2
   IMAGE/uImage-factory.bin := append-kernel
 endef
 TARGET_DEVICES += wd_cloud-mirror-gen2
+
+define Device/zyxel_nas326
+  $(Device/NAND-128K)
+  DEVICE_VENDOR := Zyxel
+  DEVICE_MODEL := NAS326
+  DEVICE_PACKAGES += mkf2fs e2fsprogs \
+	partx-utils kmod-hwmon-drivetemp -ppp -kmod-nft-offload -dnsmasq \
+	-odhcpd-ipv6only
+  DEVICE_DTS := armada-380-zyxel-nas326
+  FILESYSTEMS := squashfs ubifs
+  KERNEL := kernel-bin | append-dtb
+  KERNEL_INITRAMFS := kernel-bin | append-dtb | uImage none
+endef
+TARGET_DEVICES += zyxel_nas326

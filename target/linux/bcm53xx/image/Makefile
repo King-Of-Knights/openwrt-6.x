@@ -122,7 +122,8 @@ define Build/dwl8610ap-image
 	cp $@ $@.tmptar/rootfs.bin
 	# Hash the rootfs.bin
 	cat $@.tmptar/rootfs.bin | md5sum > $@.tmptar/rootfs.md5
-	cd $@.tmptar && tar -c -f $@.new *
+	cd $@.tmptar && $(TAR) -c -f $@.new --sort=name --numeric-owner --owner=0 --group=0 --mode=go-w \
+		$(if $(SOURCE_DATE_EPOCH),--mtime="@$(SOURCE_DATE_EPOCH)") *
 	rm -rf $@.tmptar
 	mv $@.new $@
 endef
@@ -343,7 +344,7 @@ define Device/linksys_ea9200
   DEVICE_VENDOR := Linksys
   DEVICE_MODEL := EA9200
   DEVICE_VARIANT := v1
-  DEVICE_PACKAGES := $(BRCMFMAC_43602A1) $(USB3_PACKAGES)
+  DEVICE_PACKAGES := $(BRCMFMAC_43602A1) $(USB3_PACKAGES) kmod-ledtrig-network
 endef
 TARGET_DEVICES += linksys_ea9200
 

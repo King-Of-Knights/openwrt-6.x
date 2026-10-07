@@ -34,12 +34,12 @@ ifeq ($(PKG_VERSION),13.4.0)
   PKG_HASH:=9c4ce6dbb040568fdc545588ac03c5cbc95a8dbf0c7aa490170843afb59ca8f5
 endif
 
-ifeq ($(PKG_VERSION),14.3.0)
-  PKG_HASH:=e0dc77297625631ac8e50fa92fffefe899a4eb702592da5c32ef04e2293aca3a
+ifeq ($(PKG_VERSION),14.4.0)
+  PKG_HASH:=752b6f567beac83159c77a7680b1316bdd784738bff9a9d070112c09da90f6d9
 endif
 
-ifeq ($(PKG_VERSION),15.2.0)
-  PKG_HASH:=438fd996826b0c82485a29da03a72d71d6e3541a83ec702df4271f6fe025d24e
+ifeq ($(PKG_VERSION),15.3.0)
+  PKG_HASH:=fa59c1beef8995f27c4d71c1df227587189315d3e6faff1bb4306e61b0c530eb
 endif
 
 PATCH_DIR=../patches-$(GCC_MAJOR_VERSION).x
@@ -102,6 +102,7 @@ GCC_CONFIGURE:= \
 		--disable-libmpx \
 		--disable-nls \
 		--disable-libssp \
+		--disable-tm-clone-registry \
 		$(GRAPHITE_CONFIGURE) \
 		--with-host-libstdcxx=-lstdc++ \
 		$(SOFT_FLOAT_CONFIG_OPTION) \
@@ -174,12 +175,16 @@ ifneq ($(shell gcc --version 2>&1 | grep -E "Apple.(LLVM|clang)"),)
   CFLAGS+= -fbracket-depth=512
 endif
 
+# notdir of the toolchain build directory and of the toolchain staging
+# directory are the same string, so the replacement keeps the root.
+IREMAP_TOOLCHAIN:=$(call iremap,$(BUILD_DIR_TOOLCHAIN),build_dir/$(notdir $(BUILD_DIR_TOOLCHAIN)))
+
 GCC_CONFIGURE+= \
 	CFLAGS="$(CFLAGS)" \
 	CXXFLAGS="$(CFLAGS)" \
-	CFLAGS_FOR_TARGET="$(TARGET_CFLAGS)" \
-	CXXFLAGS_FOR_TARGET="$(TARGET_CFLAGS)" \
-	GOCFLAGS_FOR_TARGET="$(TARGET_CFLAGS)"
+	CFLAGS_FOR_TARGET="$(TARGET_CFLAGS) $(IREMAP_TOOLCHAIN)" \
+	CXXFLAGS_FOR_TARGET="$(TARGET_CFLAGS) $(IREMAP_TOOLCHAIN)" \
+	GOCFLAGS_FOR_TARGET="$(TARGET_CFLAGS) $(IREMAP_TOOLCHAIN)"
 
 GCC_MAKE:= \
 	export SHELL="$(BASH)"; \

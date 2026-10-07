@@ -93,6 +93,7 @@ define Build/ctera-firmware
 		> $@.tmp/trailer
 
 	tar $(if $(SOURCE_DATE_EPOCH),--mtime="@$(SOURCE_DATE_EPOCH)") \
+		--numeric-owner --owner=0 --group=0 \
 		-H gnu -C $@.tmp -cf $@.tar header kernel trailer
 
 	# Prepare header and trailer file for fake romdisk
@@ -114,6 +115,7 @@ define Build/ctera-firmware
 		> $@.tmp/trailer
 
 	tar $(if $(SOURCE_DATE_EPOCH),--mtime="@$(SOURCE_DATE_EPOCH)") \
+		--numeric-owner --owner=0 --group=0 \
 		-H gnu -C $@.tmp -rf $@.tar header romdisk trailer
 
 	mv $@.tar $@
@@ -134,19 +136,6 @@ define Build/sdcard-img-ext4
 		$(if $(UBOOT),$(STAGING_DIR_IMAGE)/$(UBOOT)) \
 		83 $(CONFIG_TARGET_KERNEL_PARTSIZE) $@.bootimg \
 		83 $(CONFIG_TARGET_ROOTFS_PARTSIZE) $(IMAGE_ROOTFS)
-endef
-
-define Build/uDPU-firmware
-	(rm -fR $@-fw; mkdir -p $@-fw)
-	$(CP) $(BIN_DIR)/$(KERNEL_INITRAMFS_IMAGE) $@-fw/recovery.itb
-	$(CP) $(IMAGE_ROOTFS) $@-fw/rootfs.tgz
-	$(CP) $@-boot.scr $@-fw/boot.scr
-	$(TAR) -czp --numeric-owner --owner=0 --group=0 --sort=name \
-		$(if $(SOURCE_DATE_EPOCH),--mtime="@$(SOURCE_DATE_EPOCH)") \
-		-f $@-fw/boot.tgz -C $@.boot .
-	$(TAR) -czp --numeric-owner --owner=0 --group=0 --sort=name \
-		$(if $(SOURCE_DATE_EPOCH),--mtime="@$(SOURCE_DATE_EPOCH)") \
-		-f $(KDIR_TMP)/$(DEVICE_IMG_PREFIX)-firmware.tgz -C $@-fw .
 endef
 
 define Device/FitImage

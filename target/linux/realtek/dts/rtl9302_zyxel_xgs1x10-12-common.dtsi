@@ -65,7 +65,8 @@
 
 		/* [Lime] [Blue] */
 		led_set2 = <(RTL93XX_LED_SET_5G | RTL93XX_LED_SET_2P5G | RTL93XX_LED_SET_1G |
-			     RTL93XX_LED_SET_LINK | RTL93XX_LED_SET_ACT)
+			     RTL93XX_LED_SET_100M | RTL93XX_LED_SET_10M | RTL93XX_LED_SET_LINK |
+			     RTL93XX_LED_SET_ACT)
 			    (RTL93XX_LED_SET_10G | RTL93XX_LED_SET_5G | RTL93XX_LED_SET_2P5G |
 			     RTL93XX_LED_SET_LINK | RTL93XX_LED_SET_ACT)>;
 	};
@@ -92,14 +93,20 @@
 	 * reset-gpios = <&gpio0 21 GPIO_ACTIVE_LOW>;
 	 * disabled because we do not know how to bring up again
 	 */
-	PHY_C22(0, 0)
-	PHY_C22(1, 1)
-	PHY_C22(2, 2)
-	PHY_C22(3, 3)
-	PHY_C22(4, 4)
-	PHY_C22(5, 5)
-	PHY_C22(6, 6)
-	PHY_C22(7, 7)
+	ethernet-phy-package@0 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0>;
+
+		PHY_C22(0, 0)
+		PHY_C22(1, 1)
+		PHY_C22(2, 2)
+		PHY_C22(3, 3)
+		PHY_C22(4, 4)
+		PHY_C22(5, 5)
+		PHY_C22(6, 6)
+		PHY_C22(7, 7)
+	};
 };
 
 &switch0 {
@@ -107,19 +114,19 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		SWITCH_PORT_LED(0, 1, 2, 0, usxgmii)
-		SWITCH_PORT_LED(1, 2, 2, 0, usxgmii)
-		SWITCH_PORT_LED(2, 3, 2, 0, usxgmii)
-		SWITCH_PORT_LED(3, 4, 2, 0, usxgmii)
-		SWITCH_PORT_LED(4, 5, 2, 0, usxgmii)
-		SWITCH_PORT_LED(5, 6, 2, 0, usxgmii)
-		SWITCH_PORT_LED(6, 7, 2, 0, usxgmii)
-		SWITCH_PORT_LED(7, 8, 2, 0, usxgmii)
+		SWITCH_PORT_LED(0, 1, 2, 0, 0, usxgmii)
+		SWITCH_PORT_LED(1, 2, 2, 1, 0, usxgmii)
+		SWITCH_PORT_LED(2, 3, 2, 2, 0, usxgmii)
+		SWITCH_PORT_LED(3, 4, 2, 3, 0, usxgmii)
+		SWITCH_PORT_LED(4, 5, 2, 4, 0, usxgmii)
+		SWITCH_PORT_LED(5, 6, 2, 5, 0, usxgmii)
+		SWITCH_PORT_LED(6, 7, 2, 6, 0, usxgmii)
+		SWITCH_PORT_LED(7, 8, 2, 7, 0, usxgmii)
 
 		port@24 {
 			reg = <24>;
 			label = "lan9";
-			pcs-handle = <&serdes6>;
+			pcs-handle = <&serdes6 0>;
 			phy-handle = <&phy24>;
 			phy-mode = "sgmii";
 			led-set = <1>;
@@ -128,7 +135,7 @@
 		port@25 {
 			reg = <25>;
 			label = "lan10";
-			pcs-handle = <&serdes7>;
+			pcs-handle = <&serdes7 0>;
 			phy-handle = <&phy25>;
 			phy-mode = "sgmii";
 			led-set = <1>;

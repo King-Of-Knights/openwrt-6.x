@@ -120,6 +120,14 @@ define Device/friendlyarm_nanopi-r2s
 endef
 TARGET_DEVICES += friendlyarm_nanopi-r2s
 
+define Device/friendlyarm_nanopi-r2s-plus
+  $(Device/rk3328)
+  DEVICE_VENDOR := FriendlyARM
+  DEVICE_MODEL := NanoPi R2S Plus
+  DEVICE_PACKAGES := kmod-usb-net-rtl8152
+endef
+TARGET_DEVICES += friendlyarm_nanopi-r2s-plus
+
 define Device/friendlyarm_nanopi-r3s
   $(Device/rk3566)
   DEVICE_VENDOR := FriendlyARM
@@ -151,7 +159,7 @@ define Device/friendlyarm_nanopi-r5c
   $(Device/rk3568)
   DEVICE_VENDOR := FriendlyARM
   DEVICE_MODEL := NanoPi R5C
-  DEVICE_PACKAGES := kmod-r8169 kmod-rtw88-8822ce rtl8822ce-firmware wpad-basic-mbedtls
+  DEVICE_PACKAGES := kmod-button-hotplug kmod-input-adc-keys kmod-r8169 kmod-rtw88-8822ce rtl8822ce-firmware wpad-basic-mbedtls
 endef
 TARGET_DEVICES += friendlyarm_nanopi-r5c
 
@@ -159,7 +167,7 @@ define Device/friendlyarm_nanopi-r5s
   $(Device/rk3568)
   DEVICE_VENDOR := FriendlyARM
   DEVICE_MODEL := NanoPi R5S
-  DEVICE_PACKAGES := kmod-r8169
+  DEVICE_PACKAGES := kmod-button-hotplug kmod-input-adc-keys kmod-r8169
 endef
 TARGET_DEVICES += friendlyarm_nanopi-r5s
 
@@ -183,7 +191,6 @@ define Device/friendlyarm_nanopi-r76s
   $(Device/rk3576)
   DEVICE_VENDOR := FriendlyARM
   DEVICE_MODEL := NanoPi R76S
-  UBOOT_DEVICE_NAME := generic-rk3576
   DEVICE_PACKAGES := kmod-r8169 kmod-rtw88-8822cs wpad-basic-mbedtls
 endef
 TARGET_DEVICES += friendlyarm_nanopi-r76s

@@ -37,12 +37,9 @@ ar8327_phy_rgmii_set(struct ar8xxx_priv *priv, struct phy_device *phydev)
 {
 	u16 phy_val = 0;
 	int phyaddr = phydev->mdio.addr;
-	struct device_node *np = phydev->mdio.dev.of_node;
+	struct device *dev = &phydev->mdio.dev;
 
-	if (!np)
-		return;
-
-	if (!of_property_read_bool(np, "qca,phy-rgmii-en")) {
+	if (!device_property_present(dev, "qca,phy-rgmii-en")) {
 		pr_err("ar8327: qca,phy-rgmii-en is not specified\n");
 		return;
 	}
@@ -53,7 +50,7 @@ ar8327_phy_rgmii_set(struct ar8xxx_priv *priv, struct phy_device *phydev)
 				AR8327_PHY_MODE_SEL, phy_val);
 
 	/* set rgmii tx clock delay if needed */
-	if (!of_property_read_bool(np, "qca,txclk-delay-en")) {
+	if (!device_property_present(dev, "qca,txclk-delay-en")) {
 		pr_err("ar8327: qca,txclk-delay-en is not specified\n");
 		return;
 	}
@@ -64,7 +61,7 @@ ar8327_phy_rgmii_set(struct ar8xxx_priv *priv, struct phy_device *phydev)
 				AR8327_PHY_SYS_CTRL, phy_val);
 
 	/* set rgmii rx clock delay if needed */
-	if (!of_property_read_bool(np, "qca,rxclk-delay-en")) {
+	if (!device_property_present(dev, "qca,rxclk-delay-en")) {
 		pr_err("ar8327: qca,rxclk-delay-en is not specified\n");
 		return;
 	}
@@ -364,13 +361,41 @@ ar8327_led_destroy(struct ar8327_led *aled)
 }
 
 static void
-ar8327_leds_init(struct ar8xxx_priv *priv)
+ar8327_leds_init(struct ar8xxx_priv *priv, struct fwnode_handle *leds)
 {
 	struct ar8327_data *data = priv->chip_data;
+	struct fwnode_handle *child;
 	unsigned i;
 
 	if (!IS_ENABLED(CONFIG_AR8216_PHY_LEDS))
 		return;
+
+	fwnode_for_each_available_child_node(leds, child) {
+		u32 reg = 0, mode = 0;
+		struct ar8327_led_info info;
+		const char *name;
+		int ret;
+
+		ret = fwnode_property_read_u32(child, "reg", &reg);
+		if (ret) {
+			pr_err("ar8327: LED %pfwP is missing reg node\n", child);
+			continue;
+		}
+
+		fwnode_property_read_u32(child, "qca,led-mode", &mode);
+
+		if (fwnode_property_read_string(child, "label", &name))
+			name = fwnode_get_name(child);
+
+		info = (struct ar8327_led_info) {
+			.name = name,
+			.fwnode = child,
+			.active_low = fwnode_property_present(child, "active-low"),
+			.led_num = (enum ar8327_led_num) reg,
+		        .mode = (enum ar8327_led_mode) mode
+		};
+		ar8327_led_create(priv, &info);
+	}
 
 	for (i = 0; i < data->num_leds; i++) {
 		struct ar8327_led *aled;
@@ -402,31 +427,32 @@ ar8327_leds_cleanup(struct ar8xxx_priv *priv)
 		aled = data->leds[i];
 		ar8327_led_destroy(aled);
 	}
-
-	kfree(data->leds);
 }
 
 static int
-ar8327_hw_config_of(struct ar8xxx_priv *priv, struct device_node *np)
+ar8327_hw_config_of(struct ar8xxx_priv *priv, struct device *dev)
 {
 	struct ar8327_data *data = priv->chip_data;
-	const __be32 *paddr;
-	int len;
-	int i;
-	struct device_node *leds;
+	int len, i;
+	u32 *vals;
 
-	paddr = of_get_property(np, "qca,ar8327-initvals", &len);
-	if (!paddr || len < (2 * sizeof(*paddr)))
+	len = device_property_count_u32(dev, "qca,ar8327-initvals");
+	if (len < 2 || (len & 1))
 		return -EINVAL;
 
-	len /= sizeof(*paddr);
+	vals = kmalloc_array(len, sizeof(*vals), GFP_KERNEL);
+	if (!vals)
+		return -ENOMEM;
 
-	for (i = 0; i < len - 1; i += 2) {
-		u32 reg;
-		u32 val;
+	if (device_property_read_u32_array(dev, "qca,ar8327-initvals",
+					vals, len)) {
+	        kfree(vals);
+	        return -EINVAL;
+	}
 
-		reg = be32_to_cpup(paddr + i);
-		val = be32_to_cpup(paddr + i + 1);
+	for (i = 0; i < len; i += 2) {
+		u32 reg = vals[i];
+		u32 val = vals[i + 1];
 
 		switch (reg) {
 		case AR8327_REG_PORT_STATUS(0):
@@ -441,56 +467,42 @@ ar8327_hw_config_of(struct ar8xxx_priv *priv, struct device_node *np)
 		}
 	}
 
-	leds = of_get_child_by_name(np, "leds");
-	if (!leds)
-		return 0;
-
-	data->leds = kvcalloc(of_get_child_count(leds), sizeof(void *),
-			     GFP_KERNEL);
-	if (!data->leds)
-		return -ENOMEM;
-
-	for_each_available_child_of_node_scoped(leds, child) {
-		u32 reg = 0, mode = 0;
-		struct ar8327_led_info info;
-		int ret;
-
-		ret = of_property_read_u32(child, "reg", &reg);
-		if (ret) {
-			pr_err("ar8327: LED %s is missing reg node\n", child->name);
-			continue;
-		}
-
-		of_property_read_u32(child, "qca,led-mode", &mode);
-
-		info = (struct ar8327_led_info) {
-			.name = of_get_property(child, "label", NULL) ? : child->name,
-			.fwnode = of_fwnode_handle(child),
-			.active_low = of_property_read_bool(child, "active-low"),
-			.led_num = (enum ar8327_led_num) reg,
-		        .mode = (enum ar8327_led_mode) mode
-		};
-		ar8327_led_create(priv, &info);
-	}
-
-	of_node_put(leds);
+	kfree(vals);
 	return 0;
 }
 
 static int
 ar8327_hw_init(struct ar8xxx_priv *priv)
 {
+	struct device *dev = priv->pdev;
+	struct fwnode_handle *child;
+	struct fwnode_handle *leds;
+	struct ar8327_data *data;
+	size_t count = 0;
 	int ret;
 
-	priv->chip_data = kzalloc(sizeof(struct ar8327_data), GFP_KERNEL);
-	if (!priv->chip_data)
+	leds = device_get_named_child_node(dev, "leds");
+	if (leds)
+		fwnode_for_each_child_node(leds, child)
+			count++;
+	data = kzalloc(struct_size(data, leds, count), GFP_KERNEL);
+	if (!data) {
+		fwnode_handle_put(leds);
 		return -ENOMEM;
+	}
 
-	ret = ar8327_hw_config_of(priv, priv->pdev->of_node);
-	if (ret)
+	priv->chip_data = data;
+
+	ret = ar8327_hw_config_of(priv, dev);
+	if (ret) {
+		fwnode_handle_put(leds);
 		return ret;
+	}
 
-	ar8327_leds_init(priv);
+	if (leds)
+		ar8327_leds_init(priv, leds);
+
+	fwnode_handle_put(leds);
 
 	ar8xxx_phy_init(priv);
 

@@ -38,6 +38,23 @@ endef
 $(eval $(call KernelPackage,hid-generic))
 
 
+define KernelPackage/uhid
+  SUBMENU:=$(INPUT_MODULES_MENU)
+  TITLE:=User-space HID device support
+  DEPENDS:=+kmod-hid
+  KCONFIG:=CONFIG_UHID
+  FILES:=$(LINUX_DIR)/drivers/hid/uhid.ko
+  AUTOLOAD:=$(call AutoProbe,uhid)
+endef
+
+define KernelPackage/uhid/description
+ Kernel module that lets user space create HID devices, used by BlueZ
+ for Bluetooth Low Energy HID devices
+endef
+
+$(eval $(call KernelPackage,uhid))
+
+
 define KernelPackage/hid-alps
   SUBMENU:=$(INPUT_MODULES_MENU)
   TITLE:=Alps HID device support
@@ -87,7 +104,7 @@ $(eval $(call KernelPackage,input-core))
 define KernelPackage/input-evdev
   SUBMENU:=$(INPUT_MODULES_MENU)
   TITLE:=Input event device
-  DEPENDS:=+kmod-input-core
+  DEPENDS:=input-support +kmod-input-core
   KCONFIG:=CONFIG_INPUT_EVDEV
   FILES:=$(LINUX_DIR)/drivers/input/evdev.ko
   AUTOLOAD:=$(call AutoLoad,60,evdev)
@@ -179,7 +196,7 @@ $(eval $(call KernelPackage,input-matrix-keypad))
 define KernelPackage/input-joydev
   SUBMENU:=$(INPUT_MODULES_MENU)
   TITLE:=Joystick device support
-  DEPENDS:=+kmod-input-core
+  DEPENDS:=input-support +kmod-input-core
   KCONFIG:=CONFIG_INPUT_JOYDEV
   FILES:=$(LINUX_DIR)/drivers/input/joydev.ko
   AUTOLOAD:=$(call AutoProbe,joydev)
@@ -243,6 +260,25 @@ define KernelPackage/input-touchscreen-edt-ft5x06/description
 endef
 
 $(eval $(call KernelPackage,input-touchscreen-edt-ft5x06))
+
+
+define KernelPackage/input-touchscreen-hynitron-cst816x
+  SUBMENU:=$(INPUT_MODULES_MENU)
+  TITLE:=Hynitron CST816X touchscreen
+  DEPENDS:=@!LINUX_6_12 +kmod-i2c-core +kmod-input-core
+  KCONFIG:= \
+	CONFIG_INPUT_TOUCHSCREEN=y \
+	CONFIG_TOUCHSCREEN_HYNITRON_CST816X
+  FILES:=$(LINUX_DIR)/drivers/input/touchscreen/hynitron-cst816x.ko
+  AUTOLOAD:=$(call AutoProbe,hynitron-cst816x)
+endef
+
+define KernelPackage/input-touchscreen-hynitron-cst816x/description
+  Kernel module for Hynitron CST816X touchscreen controller
+  used for 240×240 1.28-inch Round LCD Display Module.
+endef
+
+$(eval $(call KernelPackage,input-touchscreen-hynitron-cst816x))
 
 
 define KernelPackage/keyboard-imx
@@ -347,3 +383,26 @@ define KernelPackage/input-serio-libps2/description
 endef
 
 $(eval $(call KernelPackage,input-serio-libps2))
+
+define KernelPackage/rc-core
+  SUBMENU:=$(INPUT_MODULES_MENU)
+  TITLE:=Remote Controller support
+  KCONFIG:= \
+	CONFIG_RC_DEVICES=y \
+	CONFIG_RC_CORE
+  FILES:=$(LINUX_DIR)/drivers/media/rc/rc-core.ko
+  AUTOLOAD:=$(call AutoProbe,rc-core)
+  DEPENDS:=@!LINUX_6_12 +kmod-input-core
+endef
+
+define KernelPackage/rc-core/description
+ Enable support for Remote Controllers on Linux. This is
+ needed in order to support several video capture adapters,
+ standalone IR receivers/transmitters, and RF receivers.
+
+ Enable this option if you have a video capture board even
+ if you don't need IR, as otherwise, you may not be able to
+ compile the driver for your adapter.
+endef
+
+$(eval $(call KernelPackage,rc-core))

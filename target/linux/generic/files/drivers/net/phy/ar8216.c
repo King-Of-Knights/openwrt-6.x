@@ -2310,16 +2310,14 @@ next_attempt:
 static int
 ar8xxx_mib_init(struct ar8xxx_priv *priv)
 {
-	unsigned int len;
-
 	if (!ar8xxx_has_mib_counters(priv))
 		return 0;
 
-	BUG_ON(!priv->chip->mib_decs || !priv->chip->num_mibs);
+	if (WARN_ON(!priv->chip->mib_decs || !priv->chip->num_mibs))
+		return -EINVAL;
 
-	len = priv->dev.ports * priv->chip->num_mibs *
-	      sizeof(*priv->mib_stats);
-	priv->mib_stats = kzalloc(len, GFP_KERNEL);
+	priv->mib_stats = kcalloc(array_size(priv->dev.ports, priv->chip->num_mibs),
+				 sizeof(*priv->mib_stats), GFP_KERNEL);
 
 	if (!priv->mib_stats)
 		return -ENOMEM;
@@ -2793,7 +2791,8 @@ ar8xxx_mdiodev_probe(struct mdio_device *mdiodev)
 		snprintf(priv->sw_mii_bus->id, MII_BUS_ID_SIZE, "%s",
 			 dev_name(&mdiodev->dev));
 		mdio_node = of_get_child_by_name(priv->pdev->of_node, "mdio-bus");
-		ret = of_mdiobus_register(priv->sw_mii_bus, mdio_node);
+		ret = devm_of_mdiobus_register(priv->pdev, priv->sw_mii_bus, mdio_node);
+		of_node_put(mdio_node);
 		if (ret)
 			goto free_priv;
 	}
@@ -2859,8 +2858,6 @@ ar8xxx_mdiodev_remove(struct mdio_device *mdiodev)
 
 	unregister_switch(&priv->dev);
 	ar8xxx_mib_stop(priv);
-	if(priv->sw_mii_bus)
-		mdiobus_unregister(priv->sw_mii_bus);
 	ar8xxx_free(priv);
 }
 

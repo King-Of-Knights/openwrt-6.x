@@ -32,6 +32,21 @@
 		enet-phy-pair-order = <##po>; \
 	};
 
+#define PHY_C45_PSE(p, n, pi) \
+	phy##p: ethernet-phy@n { \
+		reg = <##n>; \
+		compatible = "ethernet-phy-ieee802.3-c45"; \
+		pses = <&pi>; \
+	};
+
+#define HASH_PSE_CELLS #pse-cells
+
+#define PSE_PI(p) \
+	pse_pi##p: pse-pi@p { \
+		reg = <p>; \
+		HASH_PSE_CELLS = <0>; \
+	};
+
 #define SWITCH_PORT(p, l, m) \
 	port##p: port@##p { \
 		reg = <##p>; \
@@ -40,21 +55,21 @@
 		phy-mode = #m ; \
 	};
 
-#define SWITCH_PORT_SDS(p, l, s, m) \
+#define SWITCH_PORT_SDS(p, l, s, i, m) \
 	port##p: port@##p { \
 		reg = <##p>; \
 		label = SWITCH_PORT_LABEL(l) ; \
-		pcs-handle = <&serdes##s>; \
+		pcs-handle = <&serdes##s i>; \
 		phy-handle = <&phy##p>; \
 		phy-mode = #m ; \
 	};
 
-#define SWITCH_PORT_LED(p, l, s, c, m) \
+#define SWITCH_PORT_LED(p, l, s, i, c, m) \
 	port##p: port@##p { \
 		reg = <##p>; \
 		label = SWITCH_PORT_LABEL(l) ; \
 		led-set = <##c>; \
-		pcs-handle = <&serdes##s>; \
+		pcs-handle = <&serdes##s i>; \
 		phy-handle = <&phy##p>; \
 		phy-mode = #m ; \
 	};
@@ -64,7 +79,7 @@
 		reg = <##p>; \
 		label = SWITCH_PORT_LABEL(l) ; \
 		led-set = <##c>; \
-		pcs-handle = <&serdes##s>; \
+		pcs-handle = <&serdes##s 0>; \
 		phy-mode = "1000base-x"; \
 		sfp = <&sfp##g>; \
 		managed = "in-band-status"; \

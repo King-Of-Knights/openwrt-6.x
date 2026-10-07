@@ -33,18 +33,16 @@ Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
 
 --- a/drivers/mtd/nand/spi/Makefile
 +++ b/drivers/mtd/nand/spi/Makefile
-@@ -1,5 +1,6 @@
+@@ -1,5 +1,5 @@
  # SPDX-License-Identifier: GPL-2.0
  spinand-objs := core.o otp.o
--spinand-objs += alliancememory.o ato.o esmt.o etron.o fmsh.o foresee.o gigadevice.o
--spinand-objs += macronix.o micron.o paragon.o skyhigh.o toshiba.o winbond.o xtx.o
-+spinand-objs += alliancememory.o ato.o dosilicon.o esmt.o etron.o fmsh.o foresee.o
-+spinand-objs += gigadevice.o macronix.o micron.o paragon.o skyhigh.o toshiba.o
-+spinand-objs += winbond.o xtx.o
+-spinand-objs += alliancememory.o ato.o esmt.o etron.o fmsh.o foresee.o gigadevice.o heyangtek.o
++spinand-objs += alliancememory.o ato.o dosilicon.o esmt.o etron.o fmsh.o foresee.o gigadevice.o heyangtek.o
+ spinand-objs += macronix.o micron.o paragon.o skyhigh.o toshiba.o winbond.o xtx.o
  obj-$(CONFIG_MTD_SPI_NAND) += spinand.o
 --- a/drivers/mtd/nand/spi/core.c
 +++ b/drivers/mtd/nand/spi/core.c
-@@ -1235,6 +1235,7 @@ static const struct nand_ops spinand_ops
+@@ -1226,6 +1226,7 @@ static const struct nand_ops spinand_ops
  static const struct spinand_manufacturer *spinand_manufacturers[] = {
  	&alliancememory_spinand_manufacturer,
  	&ato_spinand_manufacturer,
@@ -148,7 +146,7 @@ Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
 +};
 --- a/include/linux/mtd/spinand.h
 +++ b/include/linux/mtd/spinand.h
-@@ -354,6 +354,7 @@ struct spinand_manufacturer {
+@@ -360,6 +360,7 @@ struct spinand_manufacturer {
  /* SPI NAND manufacturers */
  extern const struct spinand_manufacturer alliancememory_spinand_manufacturer;
  extern const struct spinand_manufacturer ato_spinand_manufacturer;

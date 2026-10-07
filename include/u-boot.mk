@@ -5,6 +5,7 @@ PKG_NAME ?= u-boot
 ifndef PKG_SOURCE_PROTO
 PKG_SOURCE = $(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_URL = \
+	https://git.u-boot-project.org/u-boot/u-boot/-/releases/v$(PKG_VERSION)/downloads \
 	https://mirror.cyberbits.eu/u-boot \
 	https://ftp.denx.de/pub/u-boot \
 	ftp://ftp.denx.de/pub/u-boot
@@ -29,14 +30,14 @@ endif
 ifdef UBOOT_USE_INTREE_DTC
   $(eval $(call TestHostCommand,python3-dev, \
     Please install the python3-dev package, \
+    python3.14-config --includes 2>&1 | grep 'python3', \
     python3.13-config --includes 2>&1 | grep 'python3', \
     python3.12-config --includes 2>&1 | grep 'python3', \
     python3.11-config --includes 2>&1 | grep 'python3', \
     python3.10-config --includes 2>&1 | grep 'python3', \
     python3.9-config --includes 2>&1 | grep 'python3', \
     python3.8-config --includes 2>&1 | grep 'python3', \
-    python3.7-config --includes 2>&1 | grep 'python3', \
-    python3-config --includes 2>&1 | grep -E 'python3\.([7-9]|[0-9][0-9])\.?'))
+    python3-config --includes 2>&1 | grep -E 'python3\.([8-9]|[0-9][0-9])\.?'))
 
   $(eval $(call TestHostCommand,python3-setuptools, \
     Please install the Python3 setuptools module, \
@@ -104,7 +105,7 @@ define Build/U-Boot/Target
       endif
     endif
     $(if $(DEFAULT),DEFAULT:=$(DEFAULT))
-    URL:=https://docs.u-boot.org/en/latest/
+    URL:=https://docs.u-boot-project.org/en/latest/
   endef
 
   define Package/u-boot-$(1)/install

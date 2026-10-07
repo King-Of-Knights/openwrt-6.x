@@ -4,7 +4,33 @@
 #include <linux/kernel.h>
 #include <asm/mach-rtl-otto/mach-rtl-otto.h>
 
+#include "mac.h"
+#include "l2.h"
 #include "rtl-otto.h"
+#include "vlan.h"
+#include "stp.h"
+
+#define RTL838X_STORM_CTRL_PORT_UC(p)		(0x4718 + (((p) << 2)))
+#define RTL838X_STORM_CTRL_PORT_MC(p)		(0x478c + (((p) << 2)))
+#define RTL838X_STORM_CTRL_PORT_BC(p)		(0x4800 + (((p) << 2)))
+#define RTL839X_STORM_CTRL_PORT_UC_0(p)		(0x185C + (((p) << 3)))
+#define RTL839X_STORM_CTRL_PORT_MC_0(p)		(0x19FC + (((p) << 3)))
+#define RTL839X_STORM_CTRL_PORT_BC_0(p)		(0x1B9C + (((p) << 3)))
+
+#define RTL838X_LED_GLB_CTRL			(0xA000)
+
+/* LED control by switch */
+#define RTL838X_LED_MODE_SEL			(0x1004)
+#define RTL838X_LED_MODE_CTRL			(0xA004)
+#define RTL838X_LED_P_EN_CTRL			(0xA008)
+
+/* LED control by software */
+#define RTL838X_LED_SW_CTRL			(0xA00C)
+#define RTL838X_LED0_SW_P_EN_CTRL		(0xA010)
+#define RTL838X_LED1_SW_P_EN_CTRL		(0xA014)
+#define RTL838X_LED2_SW_P_EN_CTRL		(0xA018)
+#define RTL838X_LED_SW_P_CTRL			(0xA01C)
+#define RTL838X_LED_SW_P_CTRL_PORT(p)		(RTL838X_LED_SW_P_CTRL + (((p) << 2)))
 
 #define RTL838X_DRIVER_NAME "rtl838x"
 
@@ -255,118 +281,6 @@ static const struct file_operations drop_counter_fops = {
 	.read = drop_counter_read,
 };
 
-static void l2_table_print_entry(struct seq_file *m, struct rtl838x_switch_priv *priv,
-				 struct rtl838x_l2_entry *e)
-{
-	u64 portmask;
-
-	if (e->type == L2_UNICAST) {
-		seq_puts(m, "L2_UNICAST\n");
-
-		seq_printf(m, "  mac %02x:%02x:%02x:%02x:%02x:%02x vid %u rvid %u\n",
-			   e->mac[0], e->mac[1], e->mac[2], e->mac[3], e->mac[4], e->mac[5],
-			   e->vid, e->rvid);
-
-		seq_printf(m, "  port %d age %d", e->port, e->age);
-		if (e->is_trunk) {
-			seq_printf(m, "  trunk %d trunk_members: 0x%08llx non-primary: 0x%08llx primary-port: %d",
-				   e->trunk,
-				   priv->lags_port_members[e->trunk],
-				   priv->lag_non_primary,
-				   priv->lag_primary[e->trunk]);
-		}
-		if (e->is_static)
-			seq_puts(m, " static");
-		if (e->block_da)
-			seq_puts(m, " block_da");
-		if (e->block_sa)
-			seq_puts(m, " block_sa");
-		if (e->suspended)
-			seq_puts(m, " suspended");
-		if (e->next_hop)
-			seq_printf(m, " next_hop route_id %u", e->nh_route_id);
-		seq_puts(m, "\n");
-
-	} else {
-		if (e->type == L2_MULTICAST) {
-			seq_puts(m, "L2_MULTICAST\n");
-
-			seq_printf(m, "  mac %02x:%02x:%02x:%02x:%02x:%02x vid %u rvid %u\n",
-				   e->mac[0], e->mac[1], e->mac[2], e->mac[3], e->mac[4], e->mac[5],
-				   e->vid, e->rvid);
-		}
-
-		if (e->type == IP4_MULTICAST || e->type == IP6_MULTICAST) {
-			seq_puts(m, (e->type == IP4_MULTICAST) ?
-				 "IP4_MULTICAST\n" : "IP6_MULTICAST\n");
-
-			seq_printf(m, "  gip %08x sip %08x vid %u rvid %u\n",
-				   e->mc_gip, e->mc_sip, e->vid, e->rvid);
-		}
-
-		portmask = priv->r->read_mcast_pmask(e->mc_portmask_index);
-		seq_printf(m, "  index %u ports", e->mc_portmask_index);
-		for (int i = 0; i < 64; i++) {
-			if (portmask & BIT_ULL(i))
-				seq_printf(m, " %d", i);
-		}
-		seq_puts(m, "\n");
-	}
-
-	seq_puts(m, "\n");
-}
-
-static int l2_table_show(struct seq_file *m, void *v)
-{
-	struct rtl838x_switch_priv *priv = m->private;
-	struct rtl838x_l2_entry e;
-	int bucket, index;
-
-	mutex_lock(&priv->reg_mutex);
-
-	for (int i = 0; i < priv->r->fib_entries; i++) {
-		bucket = i >> 2;
-		index = i & 0x3;
-		priv->r->read_l2_entry_using_hash(bucket, index, &e);
-
-		if (!e.valid)
-			continue;
-
-		seq_printf(m, "Hash table bucket %d index %d ", bucket, index);
-		l2_table_print_entry(m, priv, &e);
-
-		if (!((i + 1) % 64))
-			cond_resched();
-	}
-
-	for (int i = 0; i < 64; i++) {
-		priv->r->read_cam(i, &e);
-
-		if (!e.valid)
-			continue;
-
-		seq_printf(m, "CAM index %d ", i);
-		l2_table_print_entry(m, priv, &e);
-	}
-
-	mutex_unlock(&priv->reg_mutex);
-
-	return 0;
-}
-
-static int l2_table_open(struct inode *inode, struct file *filp)
-{
-	return single_open(filp, l2_table_show, inode->i_private);
-}
-
-static const struct file_operations l2_table_fops = {
-	.owner = THIS_MODULE,
-	.open = l2_table_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
-
 static int rtldsa_pmsks_table_raw_show(struct seq_file *m, void *v)
 {
 	struct rtl838x_switch_priv *priv = m->private;
@@ -508,7 +422,7 @@ static const struct file_operations rtldsa_vlan_profiles_fops = {
 static int rtldsa_vlan_table_raw_show(struct seq_file *m, void *v)
 {
 	struct rtl838x_switch_priv *priv = m->private;
-	struct rtl838x_vlan_info info;
+	struct rtldsa_vlan_info info;
 
 	if (!priv->r->vlan_tables_read)
 		return -ENOTSUPP;
@@ -547,11 +461,10 @@ static const struct file_operations rtldsa_vlan_table_raw_fops = {
 	.release = single_release,
 };
 
-
 static int rtldsa_vlan_table_show(struct seq_file *m, void *v)
 {
 	struct rtl838x_switch_priv *priv = m->private;
-	struct rtl838x_vlan_info info;
+	struct rtldsa_vlan_info info;
 
 	if (!priv->r->vlan_tables_read)
 		return -ENOTSUPP;
@@ -632,17 +545,11 @@ static ssize_t port_egress_rate_read(struct file *filp, char __user *buffer, siz
 	struct rtldsa_port *p = filp->private_data;
 	struct dsa_switch *ds = p->dp->ds;
 	struct rtl838x_switch_priv *priv = ds->priv;
-	int value;
+	u32 value;
 
-	if (priv->family_id == RTL8380_FAMILY_ID)
-		value = rtl838x_get_egress_rate(priv, p->dp->index);
-	else
-		value = rtl839x_get_egress_rate(priv, p->dp->index);
+	value = priv->r->get_egress_rate(priv, p->dp->index);
 
-	if (value < 0)
-		return -EINVAL;
-
-	return rtl838x_common_read(buffer, count, ppos, (u32)value);
+	return rtl838x_common_read(buffer, count, ppos, value);
 }
 
 static ssize_t port_egress_rate_write(struct file *filp, const char __user *buffer,
@@ -652,15 +559,13 @@ static ssize_t port_egress_rate_write(struct file *filp, const char __user *buff
 	struct dsa_switch *ds = p->dp->ds;
 	struct rtl838x_switch_priv *priv = ds->priv;
 	u32 value;
-	size_t res = rtl838x_common_write(buffer, count, ppos, &value);
+	ssize_t res;
 
+	res = rtl838x_common_write(buffer, count, ppos, &value);
 	if (res < 0)
 		return res;
 
-	if (priv->family_id == RTL8380_FAMILY_ID)
-		rtl838x_set_egress_rate(priv, p->dp->index, value);
-	else
-		rtl839x_set_egress_rate(priv, p->dp->index, value);
+	priv->r->set_egress_rate(priv, p->dp->index, value);
 
 	return res;
 }
@@ -923,8 +828,6 @@ void rtl838x_dbgfs_init(struct rtl838x_switch_priv *priv)
 
 	debugfs_create_file("drop_counters", 0400, rtl838x_dir, priv, &drop_counter_fops);
 
-	debugfs_create_file("l2_table", 0400, rtl838x_dir, priv, &l2_table_fops);
-
 	debugfs_create_file("port_masks_table_raw", 0400, rtl838x_dir, priv,
 			    &rtldsa_pmsks_table_raw_fops);
 
@@ -957,8 +860,6 @@ void rtl930x_dbgfs_init(struct rtl838x_switch_priv *priv)
 	priv->dbgfs_dir = dbg_dir;
 
 	debugfs_create_file("drop_counters", 0400, dbg_dir, priv, &drop_counter_fops);
-
-	debugfs_create_file("l2_table", 0400, dbg_dir, priv, &l2_table_fops);
 
 	debugfs_create_file("port_masks_table_raw", 0400, dbg_dir, priv,
 			    &rtldsa_pmsks_table_raw_fops);

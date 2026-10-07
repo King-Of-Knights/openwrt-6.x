@@ -235,7 +235,7 @@ $(eval $(call KernelPackage,mii))
 define KernelPackage/mdio-devres
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Supports MDIO device registration
-  DEPENDS:=+kmod-libphy +(TARGET_armsr||TARGET_bcm27xx_bcm2708||TARGET_loongarch64||TARGET_malta||TARGET_tegra):kmod-of-mdio
+  DEPENDS:=+kmod-libphy +(TARGET_armsr||TARGET_bcm27xx_bcm2708||TARGET_econet||TARGET_loongarch64||TARGET_malta||TARGET_tegra):kmod-of-mdio
 ifeq ($(KERNEL_PATCHVER),6.12)
   KCONFIG:=CONFIG_MDIO_DEVRES
 endif
@@ -254,7 +254,7 @@ $(eval $(call KernelPackage,mdio-devres))
 define KernelPackage/mdio-gpio
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:= Supports GPIO lib-based MDIO busses
-  DEPENDS:=+kmod-libphy @GPIO_SUPPORT +(TARGET_armsr||TARGET_bcm27xx_bcm2708||TARGET_loongarch64||TARGET_malta||TARGET_tegra):kmod-of-mdio
+  DEPENDS:=+kmod-libphy @GPIO_SUPPORT +(TARGET_armsr||TARGET_bcm27xx_bcm2708||TARGET_econet||TARGET_loongarch64||TARGET_malta||TARGET_tegra):kmod-of-mdio
   KCONFIG:= \
 	CONFIG_MDIO_BITBANG \
 	CONFIG_MDIO_GPIO
@@ -579,7 +579,7 @@ define KernelPackage/phy-rtl8261n
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=Realtek RTL8261N NBASE-T PHY driver
    KCONFIG:=CONFIG_RTL8261N_PHY
-   DEPENDS:=+kmod-libphy
+   DEPENDS:=@LINUX_6_12 +kmod-libphy
    FILES:=$(LINUX_DIR)/drivers/net/phy/rtl8261n/rtl8261n.ko
    AUTOLOAD:=$(call AutoLoad,18,rtl8261n,1)
 endef
@@ -626,7 +626,7 @@ $(eval $(call KernelPackage,phy-vitesse))
 define KernelPackage/phy-aeonsemi-as21xxx
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Aeonsemi AS21xxx 10G Ethernet PHY
-  DEPENDS:=+aeonsemi-as21xxx-firmware +kmod-libphy
+  DEPENDS:=+kmod-libphy
   KCONFIG:=CONFIG_AS21XXX_PHY
   FILES:= \
    $(LINUX_DIR)/drivers/net/phy/as21xxx.ko
@@ -1089,7 +1089,7 @@ $(eval $(call KernelPackage,switch-rtl8306))
 define KernelPackage/switch-rtl8366-smi
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Realtek RTL8366 SMI switch interface support
-  DEPENDS:=@GPIO_SUPPORT +kmod-swconfig +(TARGET_armsr||TARGET_bcm27xx_bcm2708||TARGET_loongarch64||TARGET_malta||TARGET_tegra):kmod-of-mdio
+  DEPENDS:=@GPIO_SUPPORT +kmod-swconfig +(TARGET_armsr||TARGET_bcm27xx_bcm2708||TARGET_econet||TARGET_loongarch64||TARGET_malta||TARGET_tegra):kmod-of-mdio
   KCONFIG:=CONFIG_RTL8366_SMI
   FILES:=$(LINUX_DIR)/drivers/net/phy/rtl8366_smi.ko
   AUTOLOAD:=$(call AutoLoad,42,rtl8366_smi,1)
@@ -1418,7 +1418,7 @@ define KernelPackage/e1000
     CONFIG_E1000_DISABLE_PACKET_SPLIT=n \
     CONFIG_E1000_NAPI=y
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/e1000/e1000.ko
-  AUTOLOAD:=$(call AutoLoad,35,e1000)
+  AUTOLOAD:=$(call AutoLoad,35,e1000,1)
 endef
 
 define KernelPackage/e1000/description
@@ -1872,7 +1872,7 @@ define KernelPackage/vmxnet3
   DEPENDS:=@PCI_SUPPORT
   KCONFIG:=CONFIG_VMXNET3
   FILES:=$(LINUX_DIR)/drivers/net/vmxnet3/vmxnet3.ko
-  AUTOLOAD:=$(call AutoLoad,35,vmxnet3)
+  AUTOLOAD:=$(call AutoLoad,35,vmxnet3,1)
 endef
 
 define KernelPackage/vmxnet3/description
@@ -2012,6 +2012,7 @@ define KernelPackage/mlx5-core
 	CONFIG_MLX5_FPGA=n \
 	CONFIG_MLX5_FPGA_IPSEC=n \
 	CONFIG_MLX5_FPGA_TLS=n \
+	CONFIG_MLX5_MACSEC=y \
 	CONFIG_MLX5_MPFS=y \
 	CONFIG_MLX5_SW_STEERING=n \
 	CONFIG_MLX5_TC_CT=n \

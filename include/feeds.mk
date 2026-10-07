@@ -6,7 +6,7 @@
 -include $(TMP_DIR)/.packageauxvars
 
 FEEDS_INSTALLED:=$(notdir $(wildcard $(TOPDIR)/package/feeds/*))
-FEEDS_AVAILABLE:=$(sort $(FEEDS_INSTALLED) $(shell $(SCRIPT_DIR)/feeds list -n 2>/dev/null))
+FEEDS_AVAILABLE=$(eval FEEDS_AVAILABLE:=$(sort $(FEEDS_INSTALLED) $(shell $(SCRIPT_DIR)/feeds list -n 2>/dev/null)))$(FEEDS_AVAILABLE)
 
 PACKAGE_SUBDIRS=$(PACKAGE_DIR)
 ifneq ($(CONFIG_PER_FEED_REPO),)
@@ -20,7 +20,7 @@ opkg_package_files = $(wildcard \
 
 apk_package_files = $(wildcard \
 	$(foreach dir,$(PACKAGE_SUBDIRS), \
-	  $(foreach pkg,$(1), $(dir)/$(pkg)-*.apk)))
+	  $(foreach pkg,$(1), $(dir)/$(pkg)*.apk)))
 
 # 1: package name
 define FeedPackageDir

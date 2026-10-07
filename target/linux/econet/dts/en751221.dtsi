@@ -55,13 +55,13 @@
 	};
 
 	pcie_phy1: pcie-phy@1fac0000 {
-		compatible = "econet,en751221-pcie-phy1";
+		compatible = "econet,en751221-pcie-gen2";
 		reg = <0x1fac0000 0x1000>;
 		#phy-cells = <0>;
 	};
 
 	pcie_phy0: pcie-phy@1faf2000 {
-		compatible = "econet,en751221-pcie-phy0";
+		compatible = "econet,en751221-pcie-gen1";
 		reg = <0x1faf2000 0x1000>;
 		#phy-cells = <0>;
 	};
@@ -295,6 +295,26 @@
 		 * uart is fixed at 115200 baud.
 		 */
 		clock-frequency = <1843200>;
+	};
+
+	gpio0: gpio@1fbf0200 {
+		compatible = "airoha,en7523-gpio";
+		reg = <0x1fbf0204 0x4>,
+		      <0x1fbf0200 0x4>,
+		      <0x1fbf0220 0x4>,
+		      <0x1fbf0214 0x4>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+
+	gpio1: gpio@1fbf0270 {
+		compatible = "airoha,en7523-gpio";
+		reg = <0x1fbf0270 0x4>,
+		      <0x1fbf0260 0x4>,
+		      <0x1fbf0264 0x4>,
+		      <0x1fbf0278 0x4>;
+		gpio-controller;
+		#gpio-cells = <2>;
 	};
 
 	timer_hpt: timer@1fbf0400 {
