@@ -228,7 +228,7 @@ Signed-off-by: Pavithra R <quic_pavir@quicinc.com>
  void xfrm_flush_gc(void)
  {
  	flush_work(&xfrm_state_gc_work);
-@@ -3016,38 +3029,16 @@ static void xfrm_state_delete_tunnel(str
+@@ -3030,51 +3030,19 @@
  	}
  }
  
@@ -238,14 +238,15 @@ Signed-off-by: Pavithra R <quic_pavir@quicinc.com>
  	const struct xfrm_type *type = READ_ONCE(x->type);
 -	struct crypto_aead *aead;
 -	u32 blksize, net_adj = 0;
- 
+-	u32 overhead, payload_mtu;
+-
 -	if (x->km.state != XFRM_STATE_VALID ||
--	    !type || type->proto != IPPROTO_ESP)
+-	    !type || type->proto != IPPROTO_ESP) {
+-		if (mtu <= x->props.header_len)
+-			return 1;
 -		return mtu - x->props.header_len;
-+	if (x->km.state == XFRM_STATE_VALID &&
-+	    type && type->get_mtu)
-+		return type->get_mtu(x, mtu);
- 
+-	}
+-
 -	aead = x->data;
 -	blksize = ALIGN(crypto_aead_blocksize(aead), 4);
 -
@@ -264,11 +265,27 @@ Signed-off-by: Pavithra R <quic_pavir@quicinc.com>
 -		break;
 -	}
 -
--	return ((mtu - x->props.header_len - crypto_aead_authsize(aead) -
--		 net_adj) & ~(blksize - 1)) + net_adj - 2;
-+	return mtu - x->props.header_len;
- }
+-	overhead = x->props.header_len + crypto_aead_authsize(aead) + net_adj;
+-	if (mtu <= overhead)
++
++	if (x->km.state == XFRM_STATE_VALID &&
++	    type && type->get_mtu)
++		return type->get_mtu(x, mtu);
++
++	if (mtu <= x->props.header_len)
+ 		return 1;
+ 
+-	payload_mtu = mtu - overhead;
+-	payload_mtu &= ~(blksize - 1);
+-	if (payload_mtu <= 2)
+-		return 1;
+-
+-	return payload_mtu + net_adj - 2;
+-
+-}
 -EXPORT_SYMBOL_GPL(xfrm_state_mtu);
++	return mtu - x->props.header_len;
++}
  
  int __xfrm_init_state(struct xfrm_state *x, bool init_replay, bool offload,
  		      struct netlink_ext_ack *extack)
@@ -351,7 +368,7 @@ Signed-off-by: Pavithra R <quic_pavir@quicinc.com>
  		if (skb->len < padto)
  			esp.tfclen = padto - skb->len;
  	}
-@@ -941,6 +943,28 @@ out:
+@@ -941,6 +943,37 @@ out:
  	return err;
  }
  
@@ -360,6 +377,7 @@ Signed-off-by: Pavithra R <quic_pavir@quicinc.com>
 +	struct crypto_aead *aead = x->data;
 +	u32 blksize = ALIGN(crypto_aead_blocksize(aead), 4);
 +	unsigned int net_adj;
++	u32 overhead, payload_mtu;
 +
 +	switch (x->props.mode) {
 +	case XFRM_MODE_TRANSPORT:
@@ -373,8 +391,16 @@ Signed-off-by: Pavithra R <quic_pavir@quicinc.com>
 +		BUG();
 +	}
 +
-+	return ((mtu - x->props.header_len - crypto_aead_authsize(aead) -
-+		 net_adj) & ~(blksize - 1)) + net_adj - 2;
++	overhead = x->props.header_len + crypto_aead_authsize(aead) + net_adj;
++	if (mtu <= overhead)
++		return 1;
++
++	payload_mtu = mtu - overhead;
++	payload_mtu &= ~(blksize - 1);
++	if (payload_mtu <= 2)
++		return 1;
++
++	return payload_mtu + net_adj - 2;
 +}
 +
  static int esp4_err(struct sk_buff *skb, u32 info)
@@ -408,7 +434,7 @@ Signed-off-by: Pavithra R <quic_pavir@quicinc.com>
  		if (skb->len < padto)
  			esp.tfclen = padto - skb->len;
  	}
-@@ -983,6 +985,19 @@ out:
+@@ -983,6 +985,28 @@ out:
  	return ret;
  }
  
@@ -417,12 +443,21 @@ Signed-off-by: Pavithra R <quic_pavir@quicinc.com>
 +	struct crypto_aead *aead = x->data;
 +	u32 blksize = ALIGN(crypto_aead_blocksize(aead), 4);
 +	unsigned int net_adj = 0;
++	u32 overhead, payload_mtu;
 +
 +	if (x->props.mode != XFRM_MODE_TUNNEL)
 +		net_adj = sizeof(struct ipv6hdr);
 +
-+	return ((mtu - x->props.header_len - crypto_aead_authsize(aead) -
-+		 net_adj) & ~(blksize - 1)) + net_adj - 2;
++	overhead = x->props.header_len + crypto_aead_authsize(aead) + net_adj;
++	if (mtu <= overhead)
++		return 1;
++
++	payload_mtu = mtu - overhead;
++	payload_mtu &= ~(blksize - 1);
++	if (payload_mtu <= 2)
++		return 1;
++
++	return payload_mtu + net_adj - 2;
 +}
 +
  static int esp6_err(struct sk_buff *skb, struct inet6_skb_parm *opt,

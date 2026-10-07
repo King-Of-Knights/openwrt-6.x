@@ -73,10 +73,10 @@
  		case AD_MUX_COLLECTING_DISTRIBUTING:
  			port->actor_oper_port_state |= LACP_STATE_COLLECTING;
  			port->actor_oper_port_state |= LACP_STATE_DISTRIBUTING;
-@@ -2060,6 +2118,7 @@ static void ad_enable_collecting_distrib
- 					      bool *update_slave_arr)
- {
- 	if (port->aggregator->is_active) {
+@@ -2062,6 +2120,7 @@ static void ad_enable_collecting_distrib
+ 	struct aggregator *aggregator = rcu_dereference(port->aggregator);
+ 
+ 	if (aggregator->is_active) {
 +		struct bond_cb *lag_cb_main; /* QCA NSS ECM bonding support */
  		slave_dbg(port->slave->bond->dev, port->slave->dev,
  			  "Enabling port %d (LAG %d)\n",
@@ -169,7 +169,7 @@
 +	}
 +
 +	bond_for_each_slave_rcu(bond, slave, iter) {
-+		agg = SLAVE_AD_INFO(slave)->port.aggregator;
++		agg = rcu_dereference(SLAVE_AD_INFO(slave)->port.aggregator);
 +		if (!agg || agg->aggregator_identifier != agg_id)
 +			continue;
 +
@@ -616,17 +616,18 @@
  }
  
  /* in broadcast mode, we send everything to all usable interfaces. */
-@@ -5582,8 +5882,9 @@ static netdev_tx_t __bond_start_xmit(str
- 		return bond_xmit_roundrobin(skb, dev);
- 	case BOND_MODE_ACTIVEBACKUP:
- 		return bond_xmit_activebackup(skb, dev);
--	case BOND_MODE_8023AD:
+@@ -5585,9 +5885,9 @@ static netdev_tx_t __bond_start_xmit(str
+ 	case BOND_MODE_8023AD:
+ 		if (bond_should_broadcast_neighbor(skb, dev))
+ 			return bond_xmit_broadcast(skb, dev, false);
+-		fallthrough;
++		return bond_3ad_xor_xmit(skb, dev);
  	case BOND_MODE_XOR:
+-		return bond_3ad_xor_xmit(skb, dev);
 +		return bond_xmit_xor(skb, dev); /* QCA NSS ECM bonding support */
-+	case BOND_MODE_8023AD:
- 		return bond_3ad_xor_xmit(skb, dev);
  	case BOND_MODE_BROADCAST:
- 		return bond_xmit_broadcast(skb, dev);
+ 		return bond_xmit_broadcast(skb, dev, true);
+ 	case BOND_MODE_ALB:
 --- a/include/net/bond_3ad.h
 +++ b/include/net/bond_3ad.h
 @@ -308,8 +308,15 @@ int bond_3ad_lacpdu_recv(const struct sk
