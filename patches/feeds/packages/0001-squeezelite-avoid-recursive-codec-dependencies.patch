@@ -1,0 +1,36 @@
+From a3750b7bfb1e335b9bdfaa71f6ced9dfb7f0c109 Mon Sep 17 00:00:00 2001
+From: King-Of-Knights <398225157@qq.com>
+Date: Wed, 7 Oct 2026 23:58:41 +0800
+Subject: [PATCH] squeezelite: separate codec options from package dependency
+ gating
+
+Keep custom codec options in their own menu so conditionally inherited FFmpeg dependencies do not depend back on the parent package. Codec defaults remain disabled.
+---
+ sound/squeezelite/Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sound/squeezelite/Makefile b/sound/squeezelite/Makefile
+index 9c8fac2ba..a6dd7e874 100644
+--- a/sound/squeezelite/Makefile
++++ b/sound/squeezelite/Makefile
+@@ -66,7 +66,7 @@ define Package/squeezelite-custom
+ endef
+ 
+ define Package/squeezelite-custom/config
+-	if PACKAGE_squeezelite-custom
++	menu "Custom Squeezelite codec options"
+ 		config SQUEEZELITE_AAC
+ 		    bool "AAC codec support"
+ 		    help
+@@ -132,7 +132,7 @@ define Package/squeezelite-custom/config
+ 		    help
+ 			WMA and ALAC codec support
+ 		    default n
+-	endif
++	endmenu
+ endef
+ 
+ define Package/squeezelite/description/default
+-- 
+2.43.0
+

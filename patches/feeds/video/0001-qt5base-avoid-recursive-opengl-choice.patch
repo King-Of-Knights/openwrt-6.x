@@ -1,0 +1,25 @@
+From 038831ebbb30baea9cd8c4b1581a908a6f29e69c Mon Sep 17 00:00:00 2001
+From: King-Of-Knights <398225157@qq.com>
+Date: Wed, 7 Oct 2026 23:58:41 +0800
+Subject: [PATCH] qt5base: avoid parent dependency in the OpenGL choice
+
+The GUI package inherits conditional Mesa capability dependencies from the OpenGL choice. Keep the choice independent of the GUI symbol to avoid a recursive Kconfig dependency. The default remains no OpenGL.
+---
+ frameworks/qt5/qt5base/Config.in | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/frameworks/qt5/qt5base/Config.in b/frameworks/qt5/qt5base/Config.in
+index aa89719..15663c7 100644
+--- a/frameworks/qt5/qt5base/Config.in
++++ b/frameworks/qt5/qt5base/Config.in
+@@ -18,7 +18,6 @@ config BUILD_qt5base-gui_DRM
+ choice
+     prompt "Which OpenGL variant to use"
+     default BUILD_qt5base-gui_OPENGL_NONE
+-    depends on PACKAGE_qt5base-gui
+ 
+ config BUILD_qt5base-gui_OPENGL_OPENGLES2
+     bool "es2"
+-- 
+2.43.0
+

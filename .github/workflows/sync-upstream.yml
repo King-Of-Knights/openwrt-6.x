@@ -167,6 +167,7 @@ jobs:
             fi
 
             ./scripts/feeds update -a
+            ./scripts/apply-feed-patches.sh
             ./scripts/feeds install -a
 
           cat > .config << 'EOF'

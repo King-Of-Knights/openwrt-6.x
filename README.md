@@ -28,9 +28,13 @@
    ```bash
    git clone --depth 1 -b main --single-branch https://github.com/King-Of-Knights/openwrt-6.x.git
    cd openwrt-6.x
-   ./scripts/feeds update -a && ./scripts/feeds install -a
+   ./scripts/feeds update -a
+   ./scripts/apply-feed-patches.sh
+   ./scripts/feeds install -a
    make menuconfig
    ```
+
+   `apply-feed-patches.sh` 会应用本仓库保存的 feeds 编译修复并刷新受影响的索引；重复执行会跳过已应用的补丁。
 
 4. 下载 dl 库，编译固件
 （-j 后面是线程数，为便于排除错误推荐用单线程）
@@ -45,7 +49,9 @@
    ```bash
    cd openwrt-6.x
    git fetch && git reset --hard origin/main
-   ./scripts/feeds update -a && ./scripts/feeds install -a
+   ./scripts/feeds update -a
+   ./scripts/apply-feed-patches.sh
+   ./scripts/feeds install -a
    make menuconfig
    make V=s -j$(nproc)
    ```
